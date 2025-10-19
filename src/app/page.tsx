@@ -1,30 +1,30 @@
-import {
-  DynamicContextProvider,
-  DynamicWidget
-} from "@dynamic-labs/sdk-react-core";
-import {DynamicWagmiConnector} from "@dynamic-labs/wagmi-connector";
-import {createConfig, WagmiProvider} from "wagmi";
-import {QueryClient, QueryClientProvider} from "@tanstack/react-query";
-import {http} from "viem";
-import {mainnet} from "viem/chains";
-import {EthereumWalletConnectors} from "@dynamic-labs/ethereum";
+"use client";
 
-const config = createConfig({
-  chains: [mainnet],
-  multiInjectedProviderDiscovery: false,
-  transports: {[mainnet.id]: http()}
-});
-const queryClient = new QueryClient();
+import { DynamicWidget, useDynamicContext } from "@dynamic-labs/sdk-react-core";
+import { ReadContract } from "./read-contract";
+import CheckInstitutionStatus from "./is-institution";
+import { useAccount} from "wagmi";
+
+function AccountInfo() {
+  const { primaryWallet } = useDynamicContext();
+  const { isConnected, chain } = useAccount();
+  
+  return (
+    <div>
+      <p>wagmi connected: {isConnected ? 'true' : 'false'}</p>
+      <p>wagmi address: {primaryWallet?.address}</p>
+      <p>wagmi network: {chain?.id}</p>
+    </div>
+  );
+}
 
 export default function Home() {
   return (
-    <DynamicContextProvider
-      settings={{
-        environmentId: process.env.DYNAMIC_KEY!,
-        walletConnectors: [EthereumWalletConnectors],
-      }}
-    >
+    <div>
       <DynamicWidget />
-    </DynamicContextProvider>
+      <AccountInfo />
+      <ReadContract />
+      <CheckInstitutionStatus />
+    </div>   
   );
 }
