@@ -1,13 +1,18 @@
-export const dynamicHardhatNetwork = {
-    chainId: 31337,
-    networkId: 31337,
-    name: 'Hardhat Localnet',
-    nativeCurrency: {
-        name: 'Ether',
-        symbol: 'ETH',
-        decimals: 18,
+export const evmNetworks = [
+    {
+        blockExplorerUrls: [],
+        chainId: 31337,
+        chainName: 'Hardhat Localnet',
+        iconUrls: [],
+        name: 'Hardhat',
+        nativeCurrency: {
+            decimals: 18,
+            name: 'Ether',
+            symbol: 'ETH',
+            iconUrl: '',
+        },
+        networkId: 31337,
+        rpcUrls: ['http://127.0.0.1:8545'],
+        vanityName: 'Hardhat',
     },
-    rpcUrls: ['http://127.0.0.1:8545'],
-    blockExplorerUrls: [],
-    iconUrls: [],
-};
+];

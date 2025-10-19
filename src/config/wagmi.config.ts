@@ -1,17 +1,18 @@
 import { createConfig, http } from 'wagmi';
 import { mainnet } from 'wagmi/chains';
-import { getOrMapViemChain } from '@dynamic-labs/ethereum-core';
-import { dynamicHardhatNetwork } from './chains.config';
-
-const hardhatViemChain = getOrMapViemChain(dynamicHardhatNetwork);
+import { getOrMapViemChain} from '@dynamic-labs/ethereum-core';
+import { evmNetworks } from './chains.config';
+import { createClient } from 'viem';
 
 export const config = createConfig({
     chains: [
         mainnet,
-        hardhatViemChain
+        ...evmNetworks.map(getOrMapViemChain)
     ],
-    transports: {
-        [mainnet.id]: http(),
-        [hardhatViemChain.id]: http(hardhatViemChain.rpcUrls.default.http[0]),
-    },
+    client({ chain }) {
+    return createClient({
+      chain,
+      transport: http(),
+    });
+  },
 });

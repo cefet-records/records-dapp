@@ -3,6 +3,9 @@
 import { DynamicWidget, useDynamicContext } from "@dynamic-labs/sdk-react-core";
 import { ReadContract } from "./read-contract";
 import CheckInstitutionStatus from "./is-institution";
+import AddInstitution from "./add-institution";
+import RegisterBatchRecords from "./add-batch-record";
+import DisplayRegisteredRecords from "./get-batch-record";
 import { useAccount} from "wagmi";
 
 function AccountInfo() {
@@ -24,6 +27,9 @@ export default function Home() {
       <DynamicWidget />
       <AccountInfo />
       <ReadContract />
+      <AddInstitution />
+      <RegisterBatchRecords />
+      <DisplayRegisteredRecords />
       <CheckInstitutionStatus />
     </div>   
   );

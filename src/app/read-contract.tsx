@@ -2,7 +2,7 @@ import { wagmiContractConfig } from "@/abis/AcademicRecordStorageABI";
 import { useReadContract } from "wagmi";
 
 export function ReadContract() {
-    const {data: ownerAddress, isLoading, isError, error} = useReadContract({
+    const { data: ownerAddress, isLoading, isError, error } = useReadContract({
         ...wagmiContractConfig,
         functionName: "owner",
     });
