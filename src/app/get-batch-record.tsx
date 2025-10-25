@@ -1,12 +1,10 @@
 import { useReadContracts } from "wagmi";
 import { wagmiContractConfig } from "@/abis/AcademicRecordStorageABI";
-import { numberToHex } from "viem";
 import { JSX } from "react";
 import { formatRecordStruct } from "@/utils/utils";
 
 const mockRecordIds: `0x${string}`[] = [
-    numberToHex(1, { size: 32 }),
-    numberToHex(2, { size: 32 })
+    "0xa0e38170335401b7e8515c134a56cf8327e1e31c9fa0e6486a5ad8b6c14782ce"
 ];
 
 export default function DisplayRegisteredRecords(): JSX.Element {

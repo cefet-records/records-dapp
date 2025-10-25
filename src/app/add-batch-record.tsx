@@ -1,72 +1,142 @@
+"use client"; 
+
 import { JSX, useEffect, useState } from "react";
 import { type BaseError, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
-import { Address, stringToHex, numberToHex, Log, parseEventLogs } from "viem";
+import { Address, numberToHex, Log, parseEventLogs, toBytes, Hex, keccak256 } from "viem";
 import { wagmiContractConfig } from "@/abis/AcademicRecordStorageABI";
+import { useDynamicContext } from "@dynamic-labs/sdk-react-core";
+import { encryptAESGCM, encryptECIES } from "@/utils/cripto.utils";
+import { INSTITUTION_PUBLIC_KEY, MOCK_BATCH_DATA } from "@/utils/utils";
 
-const mockRecordIds: `0x${string}`[] = [numberToHex(1, { size: 32 }), numberToHex(2, { size: 32 })];
-const mockStudentes: Address[] = ['0x70997970C51812dc3A010C7d01b50e0d17dc79C8', '0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC'];
-const mockEncryptedData: `0x${string}`[] = [stringToHex('Dados criptografados do diploma de Teste 1'), stringToHex('Dados criptografados do histórico de Teste 2')];
-const mockEncryptedKeyInstitution: `0x${string}`[] = [stringToHex('mock-key-instituicao-1'), stringToHex('mock-key-instituicao-2')];
-const mockEncryptedKeyStudent: `0x${string}`[] = [stringToHex('mock-key-estudante-1'), stringToHex('mock-key-estudante-2')];
-const mockSignatures: `0x${string}`[] = [stringToHex('mock-assinatura-1'), stringToHex('mock-assinatura-2')];
+interface CryptographicResult {
+    recordId: Hex;
+    encryptedData: Hex;
+    encryptedKeyIssuer: Hex; 
+    encryptedKeyStudent: Hex;
+    issuerSignature: Hex; 
+    studentAddress: Address;
+}
 
 export default function RegisterBatchRecords(): JSX.Element {
+    const { primaryWallet } = useDynamicContext();
     const { data: hash, error, isPending, writeContract } = useWriteContract();
-    const handleRegisterBatch = async(): Promise<void> => {
+    const [isLoadingCrypto, setIsLoadingCrypto] = useState(false);
+    const [payloads, setPayloads] = useState<CryptographicResult[] | null>(null);
+    
+    const processBatch = async () => {
+        if (!primaryWallet || !primaryWallet.address || isLoadingCrypto) return;
+        setIsLoadingCrypto(true);
+        setPayloads(null);
+        try {
+            const institutionPublicKey = INSTITUTION_PUBLIC_KEY; 
+            const walletClient = await (primaryWallet.connector as any).getWalletClient();
+            if (!walletClient) throw new Error("Não foi possível obter o WalletClient da carteira embarcada.");
+            const signMessageFn = async (message: string | Uint8Array): Promise<Hex> => {
+                if (typeof message === "string") {
+                    return walletClient.signMessage({
+                        account: primaryWallet.address,
+                        message: message,
+                    });
+                } else {
+                    return walletClient.signMessage({
+                        account: primaryWallet.address,
+                        message: { raw: message },
+                    });
+                }
+            };
+            const results: CryptographicResult[] = [];
+            const timestamp = Date.now();
+
+            for (const record of MOCK_BATCH_DATA) {
+                const plaintextJsonString = JSON.stringify(record.plaintextData);
+                const plaintextHash = keccak256(toBytes(plaintextJsonString)); 
+                const aesKey = crypto.getRandomValues(new Uint8Array(32));
+                const encryptedData = await encryptAESGCM(plaintextJsonString, aesKey);
+                const issuerSignature = await signMessageFn(plaintextHash);
+                const encryptedKeyIssuer = await encryptECIES(aesKey, institutionPublicKey);
+                const encryptedKeyStudent = await encryptECIES(aesKey, record.studentPublicKey);
+                const recordId = keccak256(toBytes(plaintextHash + numberToHex(timestamp, { size: 32 }))); 
+
+                results.push({
+                    recordId,
+                    encryptedData,
+                    encryptedKeyIssuer,
+                    encryptedKeyStudent,
+                    issuerSignature,
+                    studentAddress: record.studentAddress,
+                });
+            }
+            console.log("payload", results);
+            setPayloads(results);
+        } catch (err: any) {
+            console.error("ERRO CRIPTOGRÁFICO OU DE ASSINATURA:", err);
+            setPayloads(null);
+            alert(`Erro ao processar lote: ${err.message || err.toString()}`);
+        } finally {
+            setIsLoadingCrypto(false);
+        }
+    };
+
+    const handleRegisterBatch = async (): Promise<void> => {
+        if (!payloads || isPending) return;
+        const cleanedSignatures = payloads.map(p => 
+            p.issuerSignature.startsWith("0x") ? p.issuerSignature.slice(2) : p.issuerSignature
+        );
         writeContract({
             ...wagmiContractConfig,
             functionName: "registerBatchRecords",
             args: [
-                mockRecordIds,
-                mockStudentes,
-                mockEncryptedData,
-                mockEncryptedKeyInstitution,
-                mockEncryptedKeyStudent,
-                mockSignatures
+                payloads.map(p => p.recordId),
+                payloads.map(p => p.studentAddress),
+                payloads.map(p => p.encryptedData),
+                payloads.map(p => p.encryptedKeyIssuer),
+                payloads.map(p => p.encryptedKeyStudent),
+                cleanedSignatures.map(sig => `0x${sig}` as Hex),
             ]
         });
     };
+
     const { 
         data: receipt, 
         isLoading: isConfirming, 
         isSuccess: isConfirmed 
-    } = useWaitForTransactionReceipt({ 
-        hash
-    });
+    } = useWaitForTransactionReceipt({ hash });
+    
     const [recordEvents, setRecordEvents] = useState<Log[]>([]);
+    
     useEffect(() => {
         if (receipt) {
             const events = parseEventLogs({
                 abi: wagmiContractConfig.abi,
                 logs: receipt.logs,
-                eventName: 'RecordRegistered'
+                eventName: "RecordRegistered"
             });
             setRecordEvents(events);
         }
-    }, [receipt]);    
+    }, [receipt]); 
+    
+    const buttonText = isPending 
+        ? "Enviando Transação..." 
+        : (isLoadingCrypto 
+            ? `Processando ${MOCK_BATCH_DATA.length} Registros...` 
+            : (isConfirming 
+                ? "Confirmando Transação..." 
+                : (payloads ? "Assinar e Enviar Lote para Blockchain" : "Iniciar Criptografia e Preparar Lote")
+            )
+        );
+    
+    const isDisabled = isPending || isConfirming || isLoadingCrypto || !primaryWallet?.address;
+
     return (
         <div>
-            <h3>Registrar Lote de Teste</h3>
-            <p>Isto enviará uma transação com 2 registros acadêmicos mocados.</p>
-            <button disabled={isPending || isConfirming} onClick={handleRegisterBatch} type="button">
-                {isPending ? "Enviando Transação..." : (isConfirming ? "Confirmando..." : "Registrar Lote")}
-            </button>
-            {hash && <div>Transaction Hash: {hash}</div>}
-            {isConfirming && <div>Aguardando confirmação...</div>}
-            {isConfirmed && <div style={{color: 'green'}}>Lote registrado com sucesso!</div>}
-            {isConfirmed && recordEvents.length > 0 && (
-                <div style={{marginTop: '1rem'}}>
-                    <h4>Eventos 'RecordRegistered' Emitidos:</h4>
-                    <pre style={{background: '#f4f4f4', padding: '10px', borderRadius: '5px'}}>
-                        {JSON.stringify(
-                            recordEvents, 
-                            (key, value) => (typeof value === 'bigint' ? value.toString() : value), 
-                            2
-                        )}
-                    </pre>
-                </div>
-            )}
-            {error && <div style={{color: 'red'}}>Erro: {(error as BaseError).shortMessage || error.message}</div>}
+            <h3>Registrar Lote de Registros Acadêmicos</h3>
+            <p>O processo de **segurança** (AES e ECIES) é realizado no cliente antes do envio.</p>
+            <button disabled={isDisabled} onClick={payloads ? handleRegisterBatch : processBatch} type="button">{buttonText}</button>
+            {isLoadingCrypto && <div style={{color: "orange", marginTop: "1rem"}}><p>Processando {MOCK_BATCH_DATA.length} registros...</p></div>}
+            {hash && <div style={{marginTop: "1rem"}}>Transaction Hash: {hash}</div>}
+            {error && <div style={{color: "red", marginTop: "0.5rem"}}>Erro: {(error as BaseError)?.shortMessage || error?.message || "Erro desconhecido"}</div>}
+            {isConfirmed && <div style={{color: "green", marginTop: "0.5rem"}}>Lote registrado com sucesso!</div>}
+            {isConfirmed && recordEvents.length > 0 && (<div style={{marginTop: "1rem"}}><h4>Eventos "RecordRegistered" Emitidos:</h4></div>)}
         </div>
     );
 }
