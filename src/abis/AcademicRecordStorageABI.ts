@@ -130,6 +130,10 @@ const AcademicRecordStorageABI = [
         "type": "event"
     },
     {
+        "stateMutability": "payable",
+        "type": "fallback"
+    },
+    {
         "inputs": [
             {
                 "internalType": "address",
@@ -424,6 +428,10 @@ const AcademicRecordStorageABI = [
         ],
         "stateMutability": "view",
         "type": "function"
+    },
+    {
+        "stateMutability": "payable",
+        "type": "receive"
     }
 ] as const satisfies Abi;
 
