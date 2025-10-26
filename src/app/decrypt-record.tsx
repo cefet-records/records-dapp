@@ -50,6 +50,19 @@ export default function DecryptRecord() {
         }
     });
 
+    const { data: visitorKeyData, isLoading: isLoadingVisitorKey, isError: isErrorVisitorKey, error: errorVisitorKey } = useReadContract({
+        ...wagmiContractConfig,
+        functionName: 'visitorAccessKeys', // A função getter automática do seu mapping
+        args: [recordIdInput as Hex, connectedAccount as Address], // [recordId, visitorAddress]
+        query: {
+            enabled: recordIdInput.length === 66 && recordIdInput.startsWith("0x") && !!connectedAccount,
+            staleTime: 5000,
+        }
+    });
+    
+    // Converte o resultado da consulta do mapping para Hex, se existir
+    const encryptedKeyVisitor: Hex | undefined = (visitorKeyData as Hex)?.length > 2 ? (visitorKeyData as Hex) : undefined;
+
     const handleDecrypt = async () => {
         setDecryptedRecord(null);
         setDecryptionError(null);
@@ -83,11 +96,26 @@ export default function DecryptRecord() {
         const connectedAddress = connectedAccount.toLowerCase();
         const isStudentOwner = record.student.toLowerCase() === connectedAddress;
         const isInstitutionIssuer = record.institution.toLowerCase() === connectedAddress;
-        if (!isStudentOwner && !isInstitutionIssuer) {
-            setDecryptionError("Permissão negada. Você não é o aluno prorietário nem a instituição emissora deste registro.");
+        const isGrantedVisitor = !!encryptedKeyVisitor; // Se a chave for retornada (não 0x)
+
+        let encryptedKeyToDecrypt: Hex;
+        
+        // 1. DETERMINAÇÃO DA CHAVE (Baseado no Papel)
+        if (isStudentOwner) {
+            // ALUNO (Usa encryptedKeyStudent)
+            encryptedKeyToDecrypt = record.encryptedKeyStudent;
+        } else if (isInstitutionIssuer) {
+            // INSTITUIÇÃO (Usa encryptedKeyInstitution)
+            encryptedKeyToDecrypt = record.encryptedKeyInstitution;
+        } else if (isGrantedVisitor) {
+            // VISITANTE (Usa a chave específica lida do mapping)
+            encryptedKeyToDecrypt = encryptedKeyVisitor as Hex;
+        } else {
+            // PERMISSÃO NEGADA
+            setDecryptionError("Permissão negada. Você não é o Aluno, Emissor, nem um Visitante com acesso concedido.");
             return;
         }
-        const encryptedKeyToDecrypt: Hex = isStudentOwner ? record.encryptedKeyStudent : record.encryptedKeyInstitution;
+        
         try {
             const aesKeyBytes = await decryptECIES(encryptedKeyToDecrypt, privateKeyInput);
             const originalData = await decryptAESGCM(record.encryptedData, aesKeyBytes);

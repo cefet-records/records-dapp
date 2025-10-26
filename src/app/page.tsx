@@ -10,6 +10,9 @@ import DecryptRecord from "./decrypt-record";
 import PublicKeyRecovery from "./get-pk";
 import { useAccount} from "wagmi";
 import { Hex } from "viem";
+import GrantAccess from "./grant-record-access";
+import ViewGrantedAccess from "./view-granted-record-access";
+import RevokeAccess from "./revoke-access";
 
 function AccountInfo() {
   const { primaryWallet } = useDynamicContext();
@@ -39,6 +42,9 @@ export default function Home() {
       <RegisterBatchRecords />
       <DisplayRegisteredRecords />
       <DecryptRecord />
+      <GrantAccess />
+      <RevokeAccess />
+      <ViewGrantedAccess />
       <PublicKeyRecovery
         title="Chave Pública do Usuário Conectado" // Título para exibir no componente
         onPublicKeyReady={handlePublicKeyRecovered} // Função de callback
