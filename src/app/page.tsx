@@ -2,8 +2,8 @@
 
 import { DynamicWidget, useDynamicContext } from "@dynamic-labs/sdk-react-core";
 import { ReadContract } from "./read-contract";
-import CheckInstitutionStatus from "./is-institution";
-import AddInstitution from "./add-institution";
+import CheckInstitutionStatus from "./institution/is-institution";
+import AddInstitution from "./institution/add-institution";
 import RegisterBatchRecords from "./add-batch-record";
 import DisplayRegisteredRecords from "./get-batch-record";
 import DecryptRecord from "./decrypt-record";
@@ -13,6 +13,11 @@ import { Hex } from "viem";
 import GrantAccess from "./grant-record-access";
 import ViewGrantedAccess from "./view-granted-record-access";
 import RevokeAccess from "./revoke-access";
+import AddStudent from "./student/add-student";
+import { AddInstitutionPublicKey } from "./institution/add-institution-pk";
+import { GetInstitutionDetails } from "./institution/get-institution";
+import { AddStudentInformation } from "./student/add-student-information";
+import { useState } from "react";
 
 function AccountInfo() {
   const { primaryWallet } = useDynamicContext();
@@ -28,6 +33,7 @@ function AccountInfo() {
 }
 
 export default function Home() {
+  const [pageStatusMessage, setPageStatusMessage] = useState<string | null>(null);
   const handlePublicKeyRecovered = (publicKey: Hex, address: Hex) => {
     console.log(`Chave Pública Recuperada no Home: ${publicKey} para o endereço: ${address}`);
     // Se você precisasse passar essa chave para outro componente que o Home renderiza,
@@ -36,10 +42,17 @@ export default function Home() {
   return (
     <div>
       <DynamicWidget />
-      <AccountInfo />
+      {/* <AccountInfo /> */}
       <ReadContract />
+
       <AddInstitution />
-      <RegisterBatchRecords />
+      <CheckInstitutionStatus />
+      <AddInstitutionPublicKey />
+      <GetInstitutionDetails />
+
+      <AddStudent />
+      <AddStudentInformation setStatusMessage={setPageStatusMessage} />
+      {/*<RegisterBatchRecords />
       <DisplayRegisteredRecords />
       <DecryptRecord />
       <GrantAccess />
@@ -49,7 +62,7 @@ export default function Home() {
         title="Chave Pública do Usuário Conectado" // Título para exibir no componente
         onPublicKeyReady={handlePublicKeyRecovered} // Função de callback
       />
-      <CheckInstitutionStatus />
+       */}
     </div>   
   );
 }

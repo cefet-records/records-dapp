@@ -8,137 +8,373 @@ const AcademicRecordStorageABI = [
         "type": "constructor"
     },
     {
-        "inputs": [
-            {
-                "internalType": "address",
-                "name": "owner",
-                "type": "address"
-            }
-        ],
-        "name": "OwnableInvalidOwner",
-        "type": "error"
-    },
-    {
-        "inputs": [
-            {
-                "internalType": "address",
-                "name": "account",
-                "type": "address"
-            }
-        ],
-        "name": "OwnableUnauthorizedAccount",
-        "type": "error"
-    },
-    {
-        "anonymous": false,
-        "inputs": [
-            {
-                "indexed": true,
-                "internalType": "bytes32",
-                "name": "recordId",
-                "type": "bytes32"
-            },
-            {
-                "indexed": true,
-                "internalType": "address",
-                "name": "student",
-                "type": "address"
-            },
-            {
-                "indexed": true,
-                "internalType": "address",
-                "name": "visitorAddress",
-                "type": "address"
-            }
-        ],
-        "name": "AccessGranted",
-        "type": "event"
-    },
-    {
-        "anonymous": false,
-        "inputs": [
-            {
-                "indexed": true,
-                "internalType": "bytes32",
-                "name": "recordId",
-                "type": "bytes32"
-            },
-            {
-                "indexed": true,
-                "internalType": "address",
-                "name": "student",
-                "type": "address"
-            },
-            {
-                "indexed": true,
-                "internalType": "address",
-                "name": "visitorAddress",
-                "type": "address"
-            }
-        ],
-        "name": "AccessRevoked",
-        "type": "event"
-    },
-    {
         "anonymous": false,
         "inputs": [
             {
                 "indexed": true,
                 "internalType": "address",
-                "name": "previousOwner",
-                "type": "address"
-            },
-            {
-                "indexed": true,
-                "internalType": "address",
-                "name": "newOwner",
-                "type": "address"
-            }
-        ],
-        "name": "OwnershipTransferred",
-        "type": "event"
-    },
-    {
-        "anonymous": false,
-        "inputs": [
-            {
-                "indexed": true,
-                "internalType": "bytes32",
-                "name": "recordId",
-                "type": "bytes32"
-            },
-            {
-                "indexed": true,
-                "internalType": "address",
-                "name": "student",
-                "type": "address"
-            },
-            {
-                "indexed": true,
-                "internalType": "address",
-                "name": "institution",
+                "name": "studentAddress",
                 "type": "address"
             },
             {
                 "indexed": false,
-                "internalType": "uint256",
-                "name": "timestamp",
-                "type": "uint256"
+                "internalType": "address",
+                "name": "allowedAddress",
+                "type": "address"
             }
         ],
-        "name": "RecordRegistered",
+        "name": "AllowedAddressAdded",
         "type": "event"
     },
     {
-        "stateMutability": "payable",
-        "type": "fallback"
+        "anonymous": false,
+        "inputs": [
+            {
+                "indexed": true,
+                "internalType": "address",
+                "name": "institutionAddress",
+                "type": "address"
+            },
+            {
+                "indexed": false,
+                "internalType": "string",
+                "name": "courseCode",
+                "type": "string"
+            }
+        ],
+        "name": "CourseAdded",
+        "type": "event"
+    },
+    {
+        "anonymous": false,
+        "inputs": [
+            {
+                "indexed": false,
+                "internalType": "string",
+                "name": "courseCode",
+                "type": "string"
+            },
+            {
+                "indexed": false,
+                "internalType": "string",
+                "name": "disciplineCode",
+                "type": "string"
+            }
+        ],
+        "name": "DisciplineAdded",
+        "type": "event"
+    },
+    {
+        "anonymous": false,
+        "inputs": [
+            {
+                "indexed": true,
+                "internalType": "address",
+                "name": "studentAddress",
+                "type": "address"
+            },
+            {
+                "indexed": false,
+                "internalType": "string",
+                "name": "disciplineCode",
+                "type": "string"
+            },
+            {
+                "indexed": false,
+                "internalType": "uint16",
+                "name": "year",
+                "type": "uint16"
+            },
+            {
+                "indexed": false,
+                "internalType": "uint8",
+                "name": "semester",
+                "type": "uint8"
+            }
+        ],
+        "name": "GradeAdded",
+        "type": "event"
+    },
+    {
+        "anonymous": false,
+        "inputs": [
+            {
+                "indexed": true,
+                "internalType": "address",
+                "name": "institutionAddress",
+                "type": "address"
+            },
+            {
+                "indexed": false,
+                "internalType": "string",
+                "name": "name",
+                "type": "string"
+            }
+        ],
+        "name": "InstitutionAdded",
+        "type": "event"
+    },
+    {
+        "anonymous": false,
+        "inputs": [
+            {
+                "indexed": true,
+                "internalType": "address",
+                "name": "studentAddress",
+                "type": "address"
+            }
+        ],
+        "name": "StudentAdded",
+        "type": "event"
+    },
+    {
+        "anonymous": false,
+        "inputs": [
+            {
+                "indexed": true,
+                "internalType": "address",
+                "name": "studentAddress",
+                "type": "address"
+            }
+        ],
+        "name": "StudentInformationAdded",
+        "type": "event"
     },
     {
         "inputs": [
             {
                 "internalType": "address",
-                "name": "_institution",
+                "name": "_institutionAddress",
                 "type": "address"
+            },
+            {
+                "components": [
+                    {
+                        "internalType": "address",
+                        "name": "studentAddress",
+                        "type": "address"
+                    },
+                    {
+                        "internalType": "string",
+                        "name": "courseCode",
+                        "type": "string"
+                    },
+                    {
+                        "internalType": "string",
+                        "name": "disciplineCode",
+                        "type": "string"
+                    },
+                    {
+                        "internalType": "uint8",
+                        "name": "semester",
+                        "type": "uint8"
+                    },
+                    {
+                        "internalType": "uint16",
+                        "name": "year",
+                        "type": "uint16"
+                    },
+                    {
+                        "internalType": "uint8",
+                        "name": "grade",
+                        "type": "uint8"
+                    },
+                    {
+                        "internalType": "uint8",
+                        "name": "attendance",
+                        "type": "uint8"
+                    },
+                    {
+                        "internalType": "bool",
+                        "name": "status",
+                        "type": "bool"
+                    }
+                ],
+                "internalType": "struct AcademicRecordStorage.BatchGradePayload[]",
+                "name": "_gradesInfo",
+                "type": "tuple[]"
+            }
+        ],
+        "name": "addBatchGrades",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "_institutionAddress",
+                "type": "address"
+            },
+            {
+                "internalType": "string",
+                "name": "_code",
+                "type": "string"
+            },
+            {
+                "internalType": "string",
+                "name": "_name",
+                "type": "string"
+            },
+            {
+                "internalType": "string",
+                "name": "_courseType",
+                "type": "string"
+            },
+            {
+                "internalType": "int256",
+                "name": "_numberOfSemesters",
+                "type": "int256"
+            }
+        ],
+        "name": "addCourse",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "institutionAddress",
+                "type": "address"
+            },
+            {
+                "internalType": "string",
+                "name": "courseCode",
+                "type": "string"
+            },
+            {
+                "internalType": "string",
+                "name": "disciplineCode",
+                "type": "string"
+            },
+            {
+                "internalType": "string",
+                "name": "name",
+                "type": "string"
+            },
+            {
+                "internalType": "string",
+                "name": "syllabus",
+                "type": "string"
+            },
+            {
+                "internalType": "int256",
+                "name": "workload",
+                "type": "int256"
+            },
+            {
+                "internalType": "int256",
+                "name": "creditCount",
+                "type": "int256"
+            }
+        ],
+        "name": "addDisciplineToCourse",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "_allowedAddress",
+                "type": "address"
+            },
+            {
+                "internalType": "address",
+                "name": "_studentAddress",
+                "type": "address"
+            },
+            {
+                "internalType": "string",
+                "name": "_encryptedData",
+                "type": "string"
+            }
+        ],
+        "name": "addEncryptedInfoWithRecipientKey",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "_institutionAddress",
+                "type": "address"
+            },
+            {
+                "internalType": "address",
+                "name": "_studentAddress",
+                "type": "address"
+            },
+            {
+                "internalType": "string",
+                "name": "_courseCode",
+                "type": "string"
+            },
+            {
+                "components": [
+                    {
+                        "internalType": "string",
+                        "name": "disciplineCode",
+                        "type": "string"
+                    },
+                    {
+                        "internalType": "uint8",
+                        "name": "semester",
+                        "type": "uint8"
+                    },
+                    {
+                        "internalType": "uint16",
+                        "name": "year",
+                        "type": "uint16"
+                    },
+                    {
+                        "internalType": "uint8",
+                        "name": "grade",
+                        "type": "uint8"
+                    },
+                    {
+                        "internalType": "uint8",
+                        "name": "attendance",
+                        "type": "uint8"
+                    },
+                    {
+                        "internalType": "bool",
+                        "name": "status",
+                        "type": "bool"
+                    }
+                ],
+                "internalType": "struct AcademicRecordStorage.Grade",
+                "name": "_gradeInfo",
+                "type": "tuple"
+            }
+        ],
+        "name": "addGrade",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "_institutionAddress",
+                "type": "address"
+            },
+            {
+                "internalType": "string",
+                "name": "_name",
+                "type": "string"
+            },
+            {
+                "internalType": "string",
+                "name": "_document",
+                "type": "string"
             }
         ],
         "name": "addInstitution",
@@ -149,57 +385,228 @@ const AcademicRecordStorageABI = [
     {
         "inputs": [
             {
-                "internalType": "bytes32",
-                "name": "_recordId",
-                "type": "bytes32"
+                "internalType": "address",
+                "name": "_institutionAddress",
+                "type": "address"
+            },
+            {
+                "internalType": "string",
+                "name": "_publicKey",
+                "type": "string"
             }
         ],
-        "name": "getRecord",
+        "name": "addInstitutionPublicKey",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "_institutionAddress",
+                "type": "address"
+            },
+            {
+                "internalType": "address",
+                "name": "_studentAddress",
+                "type": "address"
+            }
+        ],
+        "name": "addStudent",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "string",
+                "name": "_encryptedInformation",
+                "type": "string"
+            },
+            {
+                "internalType": "string",
+                "name": "_publicKey",
+                "type": "string"
+            },
+            {
+                "internalType": "string",
+                "name": "_publicHash",
+                "type": "string"
+            }
+        ],
+        "name": "addStudentInformation",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "_studentAddress",
+                "type": "address"
+            },
+            {
+                "internalType": "address",
+                "name": "_institutionAddress",
+                "type": "address"
+            },
+            {
+                "internalType": "string",
+                "name": "_encryptedInformation",
+                "type": "string"
+            }
+        ],
+        "name": "confirmStudentInformation",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "contractOwner",
+        "outputs": [
+            {
+                "internalType": "address",
+                "name": "",
+                "type": "address"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "_allowedAddress",
+                "type": "address"
+            },
+            {
+                "internalType": "address",
+                "name": "_studentAddress",
+                "type": "address"
+            }
+        ],
+        "name": "getEncryptedInfoWithRecipientKey",
+        "outputs": [
+            {
+                "internalType": "string",
+                "name": "",
+                "type": "string"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "_institutionAddress",
+                "type": "address"
+            }
+        ],
+        "name": "getInstitution",
         "outputs": [
             {
                 "components": [
                     {
-                        "internalType": "bytes32",
-                        "name": "recordId",
-                        "type": "bytes32"
-                    },
-                    {
                         "internalType": "address",
-                        "name": "student",
+                        "name": "institutionAddress",
                         "type": "address"
                     },
                     {
-                        "internalType": "address",
-                        "name": "institution",
-                        "type": "address"
+                        "internalType": "string",
+                        "name": "name",
+                        "type": "string"
                     },
                     {
-                        "internalType": "bytes",
-                        "name": "encryptedData",
-                        "type": "bytes"
+                        "internalType": "string",
+                        "name": "document",
+                        "type": "string"
                     },
                     {
-                        "internalType": "bytes",
-                        "name": "encryptedKeyInstitution",
-                        "type": "bytes"
-                    },
-                    {
-                        "internalType": "bytes",
-                        "name": "encryptedKeyStudent",
-                        "type": "bytes"
-                    },
-                    {
-                        "internalType": "bytes",
-                        "name": "signature",
-                        "type": "bytes"
-                    },
-                    {
-                        "internalType": "uint256",
-                        "name": "timestamp",
-                        "type": "uint256"
+                        "internalType": "string",
+                        "name": "publicKey",
+                        "type": "string"
                     }
                 ],
-                "internalType": "struct AcademicRecordStorage.Record",
+                "internalType": "struct AcademicRecordStorage.Institution",
+                "name": "",
+                "type": "tuple"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "getInstitutionList",
+        "outputs": [
+            {
+                "internalType": "address[]",
+                "name": "",
+                "type": "address[]"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "getPermission",
+        "outputs": [
+            {
+                "internalType": "string",
+                "name": "",
+                "type": "string"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "_studentAddress",
+                "type": "address"
+            }
+        ],
+        "name": "getStudent",
+        "outputs": [
+            {
+                "components": [
+                    {
+                        "internalType": "address",
+                        "name": "studentAddress",
+                        "type": "address"
+                    },
+                    {
+                        "internalType": "string",
+                        "name": "selfEncryptedInformation",
+                        "type": "string"
+                    },
+                    {
+                        "internalType": "string",
+                        "name": "institutionEncryptedInformation",
+                        "type": "string"
+                    },
+                    {
+                        "internalType": "string",
+                        "name": "publicKey",
+                        "type": "string"
+                    },
+                    {
+                        "internalType": "string",
+                        "name": "publicHash",
+                        "type": "string"
+                    }
+                ],
+                "internalType": "struct AcademicRecordStorage.Student",
                 "name": "",
                 "type": "tuple"
             }
@@ -210,24 +617,203 @@ const AcademicRecordStorageABI = [
     {
         "inputs": [
             {
-                "internalType": "bytes32",
-                "name": "_recordId",
-                "type": "bytes32"
-            },
-            {
                 "internalType": "address",
-                "name": "_visitorAddress",
+                "name": "_studentAddress",
                 "type": "address"
-            },
-            {
-                "internalType": "bytes",
-                "name": "_encryptedKeyVisitor",
-                "type": "bytes"
             }
         ],
-        "name": "grantVisitorAccess",
-        "outputs": [],
-        "stateMutability": "nonpayable",
+        "name": "getStudentGrades",
+        "outputs": [
+            {
+                "components": [
+                    {
+                        "internalType": "string",
+                        "name": "disciplineCode",
+                        "type": "string"
+                    },
+                    {
+                        "internalType": "uint8",
+                        "name": "semester",
+                        "type": "uint8"
+                    },
+                    {
+                        "internalType": "uint16",
+                        "name": "year",
+                        "type": "uint16"
+                    },
+                    {
+                        "internalType": "uint8",
+                        "name": "grade",
+                        "type": "uint8"
+                    },
+                    {
+                        "internalType": "uint8",
+                        "name": "attendance",
+                        "type": "uint8"
+                    },
+                    {
+                        "internalType": "bool",
+                        "name": "status",
+                        "type": "bool"
+                    }
+                ],
+                "internalType": "struct AcademicRecordStorage.Grade[]",
+                "name": "",
+                "type": "tuple[]"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "_studentAddress",
+                "type": "address"
+            }
+        ],
+        "name": "getStudentInstitutionData",
+        "outputs": [
+            {
+                "components": [
+                    {
+                        "internalType": "address",
+                        "name": "institutionAddress",
+                        "type": "address"
+                    },
+                    {
+                        "internalType": "string",
+                        "name": "name",
+                        "type": "string"
+                    },
+                    {
+                        "internalType": "string",
+                        "name": "document",
+                        "type": "string"
+                    },
+                    {
+                        "internalType": "string",
+                        "name": "publicKey",
+                        "type": "string"
+                    }
+                ],
+                "internalType": "struct AcademicRecordStorage.Institution",
+                "name": "institution",
+                "type": "tuple"
+            },
+            {
+                "components": [
+                    {
+                        "internalType": "string",
+                        "name": "code",
+                        "type": "string"
+                    },
+                    {
+                        "internalType": "string",
+                        "name": "name",
+                        "type": "string"
+                    },
+                    {
+                        "internalType": "string",
+                        "name": "courseType",
+                        "type": "string"
+                    },
+                    {
+                        "internalType": "int256",
+                        "name": "numberOfSemesters",
+                        "type": "int256"
+                    }
+                ],
+                "internalType": "struct AcademicRecordStorage.Course",
+                "name": "course",
+                "type": "tuple"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "_studentAddress",
+                "type": "address"
+            }
+        ],
+        "name": "getStudentTranscript",
+        "outputs": [
+            {
+                "components": [
+                    {
+                        "internalType": "string",
+                        "name": "disciplineCode",
+                        "type": "string"
+                    },
+                    {
+                        "internalType": "uint8",
+                        "name": "semester",
+                        "type": "uint8"
+                    },
+                    {
+                        "internalType": "uint16",
+                        "name": "year",
+                        "type": "uint16"
+                    },
+                    {
+                        "internalType": "uint8",
+                        "name": "grade",
+                        "type": "uint8"
+                    },
+                    {
+                        "internalType": "uint8",
+                        "name": "attendance",
+                        "type": "uint8"
+                    },
+                    {
+                        "internalType": "bool",
+                        "name": "status",
+                        "type": "bool"
+                    }
+                ],
+                "internalType": "struct AcademicRecordStorage.Grade[]",
+                "name": "",
+                "type": "tuple[]"
+            },
+            {
+                "components": [
+                    {
+                        "internalType": "string",
+                        "name": "code",
+                        "type": "string"
+                    },
+                    {
+                        "internalType": "string",
+                        "name": "name",
+                        "type": "string"
+                    },
+                    {
+                        "internalType": "string",
+                        "name": "syllabus",
+                        "type": "string"
+                    },
+                    {
+                        "internalType": "int256",
+                        "name": "workload",
+                        "type": "int256"
+                    },
+                    {
+                        "internalType": "int256",
+                        "name": "creditCount",
+                        "type": "int256"
+                    }
+                ],
+                "internalType": "struct AcademicRecordStorage.Discipline[]",
+                "name": "",
+                "type": "tuple[]"
+            }
+        ],
+        "stateMutability": "view",
         "type": "function"
     },
     {
@@ -265,173 +851,44 @@ const AcademicRecordStorageABI = [
     {
         "inputs": [
             {
-                "internalType": "bytes32",
-                "name": "",
-                "type": "bytes32"
+                "internalType": "address",
+                "name": "_studentAddress",
+                "type": "address"
+            },
+            {
+                "internalType": "string",
+                "name": "_encryptKey",
+                "type": "string"
             }
         ],
-        "name": "records",
+        "name": "requestAccess",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "_allowedAddress",
+                "type": "address"
+            },
+            {
+                "internalType": "address",
+                "name": "_studentAddress",
+                "type": "address"
+            }
+        ],
+        "name": "retrieveRecipientEncrpytKey",
         "outputs": [
             {
-                "internalType": "bytes32",
-                "name": "recordId",
-                "type": "bytes32"
-            },
-            {
-                "internalType": "address",
-                "name": "student",
-                "type": "address"
-            },
-            {
-                "internalType": "address",
-                "name": "institution",
-                "type": "address"
-            },
-            {
-                "internalType": "bytes",
-                "name": "encryptedData",
-                "type": "bytes"
-            },
-            {
-                "internalType": "bytes",
-                "name": "encryptedKeyInstitution",
-                "type": "bytes"
-            },
-            {
-                "internalType": "bytes",
-                "name": "encryptedKeyStudent",
-                "type": "bytes"
-            },
-            {
-                "internalType": "bytes",
-                "name": "signature",
-                "type": "bytes"
-            },
-            {
-                "internalType": "uint256",
-                "name": "timestamp",
-                "type": "uint256"
+                "internalType": "string",
+                "name": "",
+                "type": "string"
             }
         ],
         "stateMutability": "view",
         "type": "function"
-    },
-    {
-        "inputs": [
-            {
-                "internalType": "bytes32[]",
-                "name": "_recordIds",
-                "type": "bytes32[]"
-            },
-            {
-                "internalType": "address[]",
-                "name": "_studentes",
-                "type": "address[]"
-            },
-            {
-                "internalType": "bytes[]",
-                "name": "_encryptedData",
-                "type": "bytes[]"
-            },
-            {
-                "internalType": "bytes[]",
-                "name": "_encryptedKeyInstitution",
-                "type": "bytes[]"
-            },
-            {
-                "internalType": "bytes[]",
-                "name": "_encryptedKeyStudent",
-                "type": "bytes[]"
-            },
-            {
-                "internalType": "bytes[]",
-                "name": "_signatures",
-                "type": "bytes[]"
-            }
-        ],
-        "name": "registerBatchRecords",
-        "outputs": [],
-        "stateMutability": "nonpayable",
-        "type": "function"
-    },
-    {
-        "inputs": [
-            {
-                "internalType": "address",
-                "name": "_institution",
-                "type": "address"
-            }
-        ],
-        "name": "removeInstitution",
-        "outputs": [],
-        "stateMutability": "nonpayable",
-        "type": "function"
-    },
-    {
-        "inputs": [],
-        "name": "renounceOwnership",
-        "outputs": [],
-        "stateMutability": "nonpayable",
-        "type": "function"
-    },
-    {
-        "inputs": [
-            {
-                "internalType": "bytes32",
-                "name": "_recordId",
-                "type": "bytes32"
-            },
-            {
-                "internalType": "address",
-                "name": "_visitorAddress",
-                "type": "address"
-            }
-        ],
-        "name": "revokeVisitorAccess",
-        "outputs": [],
-        "stateMutability": "nonpayable",
-        "type": "function"
-    },
-    {
-        "inputs": [
-            {
-                "internalType": "address",
-                "name": "newOwner",
-                "type": "address"
-            }
-        ],
-        "name": "transferOwnership",
-        "outputs": [],
-        "stateMutability": "nonpayable",
-        "type": "function"
-    },
-    {
-        "inputs": [
-            {
-                "internalType": "bytes32",
-                "name": "",
-                "type": "bytes32"
-            },
-            {
-                "internalType": "address",
-                "name": "",
-                "type": "address"
-            }
-        ],
-        "name": "visitorAccessKeys",
-        "outputs": [
-            {
-                "internalType": "bytes",
-                "name": "",
-                "type": "bytes"
-            }
-        ],
-        "stateMutability": "view",
-        "type": "function"
-    },
-    {
-        "stateMutability": "payable",
-        "type": "receive"
     }
 ] as const satisfies Abi;
 

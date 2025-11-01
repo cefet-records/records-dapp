@@ -4,7 +4,7 @@ import { JSX } from "react";
 import { formatRecordStruct } from "@/utils/utils";
 
 const mockRecordIds: `0x${string}`[] = [
-    "0xa0e38170335401b7e8515c134a56cf8327e1e31c9fa0e6486a5ad8b6c14782ce"
+    "0x9c2a535610f210a3801af248e6f808ac80e4ab4bb1d130a32cf51b0cdf27dc7a"
 ];
 
 export default function DisplayRegisteredRecords(): JSX.Element {
