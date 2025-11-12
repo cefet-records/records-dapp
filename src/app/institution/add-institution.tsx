@@ -1,5 +1,9 @@
 import { FormEvent, JSX } from "react";
-import { type BaseError, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
+import { 
+    type BaseError, 
+    useWriteContract, 
+    useWaitForTransactionReceipt 
+} from "wagmi";
 import { Address } from "viem";
 import { wagmiContractConfig } from "@/abis/AcademicRecordStorageABI";
 

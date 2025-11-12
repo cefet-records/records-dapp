@@ -6,20 +6,19 @@ import {
     useWaitForTransactionReceipt, 
     useReadContract, 
     useAccount, 
-    useSignMessage,
     type BaseError 
 } from "wagmi";
+import * as secp from "@noble/secp256k1"; 
+import { hexToBytes, bytesToHex, Address, Hex, isAddress, keccak256, toBytes } from "viem"; 
 import { wagmiContractConfig } from "@/abis/AcademicRecordStorageABI";
 import { useDynamicContext } from "@dynamic-labs/sdk-react-core";
-import { Address, keccak256, toBytes, Hex, recoverPublicKey, isAddress } from "viem";
 import { encryptECIES } from "@/utils/cripto.utils";
-
-const STUDENT_PK_RECOVERY_MESSAGE = "Derive your Public Key for ECIES Encryption (Student)";
-const STUDENT_PK_MESSAGE_HASH = keccak256(toBytes(STUDENT_PK_RECOVERY_MESSAGE));
+import { randomBytes } from "@noble/ciphers/utils.js";
+import { Base64 } from 'js-base64'; // <<<<<<< IMPORTAR BASE64 AQUI
 
 interface InstitutionContractData {
     institutionAddress: Address;
-    publicKey: string;
+    publicKey: Hex;
 }
 
 interface PersonalInformation {
@@ -38,13 +37,8 @@ export function AddStudentInformation(): JSX.Element {
     const [status, setStatus] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
 
-    const [studentPublicKey, setStudentPublicKey] = useState<Hex | null>(null);
-    const { 
-        signMessage, 
-        data: studentSignature, 
-        isPending: isSigningStudentPK, 
-        error: studentSignError 
-    } = useSignMessage();
+    const [studentPrivateKeyInput, setStudentPrivateKeyInput] = useState<Hex | ''>(''); 
+    const [studentPublicKey, setStudentPublicKey] = useState<Hex | null>(null); 
 
     const { data: hash, error: writeError, isPending: isTxPending, writeContract } = useWriteContract();
     const { isLoading: isTxConfirming, isSuccess: isTxConfirmed } = useWaitForTransactionReceipt({ hash });
@@ -56,49 +50,46 @@ export function AddStudentInformation(): JSX.Element {
         isLoading: isLoadingInst, 
         isError: isInstError, 
         error: instError,
-        refetch: refetchInstitutionData
     } = useReadContract({
         ...wagmiContractConfig,
         functionName: 'getInstitution', 
         args: institutionAddressValid ? [institutionAddress] : undefined,
-        query: { enabled: institutionAddressValid }
+        query: { enabled: institutionAddressValid, staleTime: 0 }
     });
 
-    const recoverAndSetStudentPublicKey = useCallback(async (sig: Hex) => {
-        if (!address) return;
-        setStatus("Derivando chave pública do estudante da assinatura...");
-        setError(null);
-        try {
-            const recoveredPK = await recoverPublicKey({ 
-                hash: STUDENT_PK_MESSAGE_HASH, 
-                signature: sig,
-            });
-            setStudentPublicKey(recoveredPK);
-            setStatus("Chave pública do estudante derivada com sucesso!");
-        } catch (err: any) {
-            const msg = `Erro ao recuperar chave do estudante: ${err.message || String(err)}`;
-            setStatus(null);
-            setError(msg);
-            console.error("ERRO ao recuperar PK do estudante via assinatura:", err);
-        }
-    }, [address]);
+    const [hasMounted, setHasMounted] = useState(false);
 
     useEffect(() => {
-        if (studentSignature && !studentPublicKey) {
-            recoverAndSetStudentPublicKey(studentSignature);
-        }
-    }, [studentSignature, studentPublicKey, recoverAndSetStudentPublicKey]);
+      setHasMounted(true);
+    }, []);
 
-    const handleDeriveStudentPublicKey = () => {
-        if (!address || !isConnected || isSigningStudentPK) return;
+    const deriveStudentPublicKeyFromPrivate = useCallback(() => {
         setError(null);
-        setStatus("Aguardando confirmação na carteira para assinar mensagem e derivar sua Chave Pública...");
-        signMessage({ message: STUDENT_PK_RECOVERY_MESSAGE });
-    };
+        if (!studentPrivateKeyInput || studentPrivateKeyInput.length !== 66) { 
+            setError("Por favor, insira uma chave privada hexadecimal válida (64 caracteres + '0x') para o estudante.");
+            setStudentPublicKey(null);
+            return;
+        }
 
-    const processAndAddInformation = async () => {
-        if (!institutionAddressValid || !name || !document || !address || !studentPublicKey) {
-            setError("Por favor, preencha todos os campos e derive sua chave pública.");
+        try {
+            const privateKeyBytes = hexToBytes(studentPrivateKeyInput);
+            const publicKeyBytes = secp.getPublicKey(privateKeyBytes, false); 
+            const publicKeyHex = bytesToHex(publicKeyBytes) as Hex;
+
+            setStudentPublicKey(publicKeyHex);
+            setStatus("Chave pública do estudante derivada com sucesso da chave privada inserida!");
+        } catch (err: any) {
+            const msg = `Erro ao derivar chave pública do estudante da chave privada: ${err.message || String(err)}`;
+            setError(msg);
+            setStatus(msg);
+            console.error("ERRO ao derivar PK do estudante da chave privada:", err);
+            setStudentPublicKey(null);
+        }
+    }, [studentPrivateKeyInput]);
+
+    const addStudentInformation = async () => {
+        if (!institutionAddressValid || !name || !document || !address || !isConnected || !studentPublicKey) {
+            setError("Por favor, preencha todos os campos, conecte sua carteira e derive sua chave pública.");
             setStatus(null);
             return;
         }
@@ -108,33 +99,49 @@ export function AddStudentInformation(): JSX.Element {
         setStatus("Iniciando processo criptográfico...");
 
         try {
+            const saltBytes = randomBytes(16); 
+            const salt = bytesToHex(saltBytes); 
+            const personalInformation: PersonalInformation = { name, document, salt };
+            const informationString = JSON.stringify(personalInformation);
+
+            // publicHash ANTES da criptografia, a partir da informação em texto plano
+            const publicHashHex = keccak256(toBytes(informationString)); 
+
             const instData = institutionData as InstitutionContractData;
             if (!instData || instData.publicKey.length < 132 || instData.publicKey === '0x') {
                 throw new Error("Chave pública da Instituição não encontrada ou é inválida. Certifique-se que a instituição existe e tem uma PK registrada.");
             }
-            
-            const saltBytes = crypto.getRandomValues(new Uint8Array(16));
-            const salt = Buffer.from(saltBytes).toString('hex');
+            // A chave pública da instituição vem do contrato como Hex, conforme a interface
+            const institutionPublicKeyHex = instData.publicKey;
 
-            const personalInformation: PersonalInformation = { name, document, salt };
-            const informationString = JSON.stringify(personalInformation);
+            console.log("Public Key do Estudante (Hex):", studentPublicKey);
+            console.log("Public key da Instituição (Hex):", institutionPublicKeyHex);
 
-            const publicHash = keccak256(toBytes(informationString)); 
-            const mockAesKey = crypto.getRandomValues(new Uint8Array(32)); 
-            const encryptedKeyForInstitution = await encryptECIES(mockAesKey, instData.publicKey as Hex);
+            // encryptECIES AGORA RETORNA STRING BASE64
+            const encryptedForSelfBase64 = await encryptECIES(informationString, studentPublicKey);
+            const encryptedForInstitutionBase64 = await encryptECIES(informationString, institutionPublicKeyHex);
             
+            console.log("Criptografado para Estudante (Base64):", encryptedForSelfBase64);
+            console.log("Criptografado para Instituição (Base64):", encryptedForInstitutionBase64);
+
+            // <<<<<<<<<<<<<<<< CORREÇÕES ADICIONADAS AQUI >>>>>>>>>>>>>>>>>>>>>>>
+            // Converter studentPublicKey (Hex) para Base64
+            const studentPublicKeyBytes = hexToBytes(studentPublicKey);
+            const studentPublicKeyBase64 = Base64.fromUint8Array(studentPublicKeyBytes);
+
+            const publicHashBytes = hexToBytes(publicHashHex);
+            const publicHashBase64 = Base64.fromUint8Array(publicHashBytes);
             setStatus("Aguardando confirmação na carteira para adicionar informações...");
-            
             writeContract({
                 ...wagmiContractConfig,
                 functionName: 'addStudentInformation',
                 args: [
-                    encryptedKeyForInstitution as Hex,
-                    studentPublicKey,
-                    publicHash,
+                    encryptedForSelfBase64,           // STRING Base64
+                    encryptedForInstitutionBase64,    // STRING Base64
+                    studentPublicKeyBase64,           // STRING Base64 (corrigido)
+                    publicHashBase64,                 // STRING Base64 (corrigido)
                 ]
             });
-
         } catch (err: any) {
             console.error("Error in AddStudentInformation:", err);
             const msg = `Falha ao adicionar informações: ${err.message || String(err)}`;
@@ -151,35 +158,58 @@ export function AddStudentInformation(): JSX.Element {
             setName('');
             setDocument('');
             setStudentPublicKey(null); 
+            setStudentPrivateKeyInput(''); 
         }
     }, [isTxConfirmed]);
 
     const isAddInfoDisabled = isTxPending || isLoadingInst || !isConnected || 
-                              !institutionAddressValid ||
-                              !studentPublicKey || isSigningStudentPK || !name || !document;
+                                !institutionAddressValid || !name || !document || !studentPublicKey; 
+    
+    const isInstitutionPublicKeyInvalid = institutionAddressValid && !isLoadingInst && !isInstError && 
+                                          (!institutionData || (institutionData as InstitutionContractData).publicKey?.length < 132 || (institutionData as InstitutionContractData).publicKey === '0x');
+
+    if (!hasMounted) {
+      return <></>; 
+    }
 
     return (
         <div style={{ marginTop: '1.5rem', border: '1px solid #007bff', padding: '1rem', borderRadius: '4px' }}>
             <h2>Adicionar Informação Pessoal do Estudante</h2>
             <p className="text-sm" style={{ marginBottom: '10px', color: 'gray' }}>
-                Suas informações são cifradas para a instituição de auditoria e sua chave pública é registrada.
+                Suas informações são cifradas para você e para a instituição de auditoria. Sua chave pública de encriptação é registrada.
             </p>
 
             {!isConnected ? (
                 <p style={{ color: 'orange' }}>⚠️ Conecte sua carteira para continuar.</p>
             ) : (
                 <form className="form space-y-3">
-                    {!studentPublicKey ? (
-                        <button 
+                    {/* NOVO: Input para a chave privada do estudante */}
+                    <div style={{ marginBottom: '1rem' }}>
+                        <label htmlFor="studentPrivateKey" style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
+                            Sua Chave Privada (Estudante - Hex):
+                        </label>
+                        <input
+                            id="studentPrivateKey"
+                            type="text"
+                            value={studentPrivateKeyInput}
+                            onChange={(e) => setStudentPrivateKeyInput(e.target.value as Hex)}
+                            placeholder="Ex: 0xseu_estudante_private_key_aqui"
+                            style={{ width: '100%', padding: '0.5rem', border: '1px solid #ccc', borderRadius: '4px', boxSizing: 'border-box' }}
+                            disabled={!!studentPublicKey} 
+                        />
+                        <button
                             type="button" 
-                            onClick={handleDeriveStudentPublicKey}
-                            disabled={isSigningStudentPK || !isConnected}
-                            style={{ padding: '0.5rem 1rem', backgroundColor: '#6f42c1', color: 'white', borderRadius: '4px', opacity: isSigningStudentPK ? 0.6 : 1 }}
+                            onClick={deriveStudentPublicKeyFromPrivate}
+                            disabled={!studentPrivateKeyInput || studentPrivateKeyInput.length !== 66 || !!studentPublicKey} 
+                            style={{ marginTop: '0.5rem', padding: '0.5rem 1rem', backgroundColor: '#6f42c1', color: 'white', borderRadius: '4px', opacity: (!studentPrivateKeyInput || studentPrivateKeyInput.length !== 66 || !!studentPublicKey) ? 0.6 : 1 }}
                         >
-                            {isSigningStudentPK ? "Assinando Mensagem..." : "1. Derivar Minha Chave Pública"}
+                            Derivar Minha Chave Pública (do Estudante)
                         </button>
-                    ) : (
-                        <p style={{ color: 'green', fontWeight: 'bold' }}>✅ Chave Pública Derivada: <code style={{ fontSize: '0.8em' }}>{studentPublicKey.substring(0, 10)}...</code></p>
+                    </div>
+
+                    {/* Exibe a chave pública do estudante se estiver disponível */}
+                    {studentPublicKey && (
+                        <p style={{ color: 'green', fontWeight: 'bold' }}>✅ Chave Pública Derivada: <code style={{ fontSize: '0.8em', wordBreak: 'break-all' }}>{studentPublicKey}</code></p>
                     )}
 
                     <input
@@ -187,7 +217,7 @@ export function AddStudentInformation(): JSX.Element {
                         placeholder="Endereço da Instituição"
                         value={institutionAddress}
                         onChange={(e) => {
-                            setInstitutionAddress(e.target.value as Address | ''); // Permite string vazia
+                            setInstitutionAddress(e.target.value as Address | '');
                             setError(null);
                             setStatus(null);
                         }}
@@ -195,13 +225,13 @@ export function AddStudentInformation(): JSX.Element {
                         disabled={!studentPublicKey}
                     />
                     {isLoadingInst && <p className="text-sm text-blue-500">Verificando chave da instituição...</p>}
-                    {isInstError && <p className="text-sm text-red-500">Erro ao buscar chave da instituição: {(instError as any)?.shortMessage || instError?.message}</p>}
+                    {isInstError && <p className="text-sm text-red-500">Erro ao buscar chave da instituição: {(instError as unknown as BaseError)?.shortMessage || instError?.message}</p>}
                     
                     {!institutionAddressValid && institutionAddress !== '' && (
                         <p className="text-sm text-red-500">⚠️ Endereço da instituição inválido.</p>
                     )}
-                    {institutionAddressValid && !isLoadingInst && !isInstError && (!institutionData || (institutionData as InstitutionContractData).publicKey?.length < 132 || (institutionData as InstitutionContractData).publicKey === '0x') &&
-                        <p className="text-sm text-red-500">⚠️ A instituição existe, mas não tem chave pública registrada.</p>
+                    {isInstitutionPublicKeyInvalid &&
+                        <p className="text-sm text-red-500">⚠️ A instituição existe, mas não tem chave pública de encriptação registrada. Ou a chave é inválida.</p>
                     }
 
                     <input
@@ -231,19 +261,18 @@ export function AddStudentInformation(): JSX.Element {
                     
                     <button 
                         type="button" 
-                        onClick={processAndAddInformation}
-                        disabled={isAddInfoDisabled}
-                        style={{ padding: '0.5rem 1rem', backgroundColor: '#28a745', color: 'white', borderRadius: '4px', opacity: isAddInfoDisabled ? 0.6 : 1 }}
+                        onClick={addStudentInformation}
+                        disabled={isAddInfoDisabled || isInstitutionPublicKeyInvalid}
+                        style={{ padding: '0.5rem 1rem', backgroundColor: '#28a745', color: 'white', borderRadius: '4px', opacity: (isAddInfoDisabled || isInstitutionPublicKeyInvalid) ? 0.6 : 1 }}
                     >
-                        {isTxPending ? "Aguardando Confirmação..." : "2. Adicionar Informação do Estudante"}
+                        {isTxPending ? "Aguardando Confirmação..." : "Adicionar Informação do Estudante"}
                     </button>
                 </form>
             )}
 
             {status && <p style={{ marginTop: '0.8rem', color: 'green', fontWeight: 'bold' }}>{status}</p>}
             {error && <p style={{ color: 'red', marginTop: '0.8rem' }}>Erro: {error}</p>}
-            {studentSignError && <p style={{ color: 'red' }}>Erro na assinatura do estudante: {(studentSignError as BaseError).shortMessage || studentSignError.message}</p>}
-            {writeError && <p style={{ color: 'red' }}>Erro na transação: {(writeError as BaseError).shortMessage || writeError.message}</p>}
+            {writeError && <p style={{ color: 'red' }}>Erro na transação: {(writeError as unknown as BaseError).shortMessage || writeError.message}</p>}
         </div>
     );
 }

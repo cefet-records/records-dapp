@@ -2,35 +2,25 @@
 'use client';
 
 import React, { JSX, useState, useEffect, useCallback } from "react";
-import { useWriteContract, useWaitForTransactionReceipt, useReadContract, useSignMessage, type BaseError} from "wagmi";
+import { useWriteContract, useWaitForTransactionReceipt, useReadContract, type BaseError } from "wagmi"; // Removido useSignMessage
+import * as secp from "@noble/secp256k1"; // Importar @noble/secp256k1
+import { hexToBytes, bytesToHex, Address, Hex } from "viem"; // Adicionado hexToBytes, bytesToHex
 import { wagmiContractConfig } from "@/abis/AcademicRecordStorageABI";
 import { useDynamicContext } from "@dynamic-labs/sdk-react-core";
-import { Address, Hex, keccak256, toBytes, recoverPublicKey } from "viem";
 
-// Defina a mensagem de recuperação (deve ser a mesma em todas as chamadas)
-const RECOVERY_MESSAGE = "Generate Public Key for ECIES Encryption for Institution";
-const MESSAGE_HASH = keccak256(toBytes(RECOVERY_MESSAGE)); // Hash Keccak-256 da mensagem
+// NÃO PRECISA MAIS DE RECOVERY_MESSAGE OU MESSAGE_HASH!
+// NÃO PRECISA MAIS DE useSignMessage!
 
-// NÃO PRECISA MAIS DE PROPS!
 export function AddInstitutionPublicKey(): JSX.Element { 
     const { primaryWallet } = useDynamicContext();
     const connectedAddress = primaryWallet?.address as Address | undefined;
 
-    // Estados para a chave pública recuperada
-    const [derivedPublicKey, setDerivedPublicKey] = useState<Hex | null>(null);
-    const [derivedPublicKeyXY, setDerivedPublicKeyXY] = useState<string | null>(null);
-
+    const [privateKeyInput, setPrivateKeyInput] = useState<Hex | ''>(''); // Campo para input da chave privada
+    const [derivedPublicKey, setDerivedPublicKey] = useState<Hex | null>(null); // Chave pública derivada da privada inserida
+    
     const [statusMessage, setStatusMessage] = useState<string | null>(null);
-    const [hasCheckedExistingPK, setHasCheckedExistingPK] = useState(false); // Para controlar a verificação inicial
+    const [hasCheckedExistingPK, setHasCheckedExistingPK] = useState(false);
     const [error, setError] = useState<string | null>(null);
-
-    // Wagmi: Assinatura para derivar a chave pública
-    const { 
-        signMessage, 
-        data: signature, 
-        isPending: isSigning, 
-        error: signError 
-    } = useSignMessage();
 
     // Wagmi: Leitura da PK existente no contrato
     const { 
@@ -63,7 +53,6 @@ export function AddInstitutionPublicKey(): JSX.Element {
             if (existingPublicKey && existingPublicKey.length > 2) { // length > 2 para ignorar "0x"
                 setStatusMessage(`Chave pública ECDSA já registrada no contrato: ${existingPublicKey.substring(0, 20)}...`);
                 setDerivedPublicKey(existingPublicKey as Hex); // Carrega a PK existente no estado
-                setDerivedPublicKeyXY(existingPublicKey.slice(4)); // Também para o formato X+Y
             } else {
                 setStatusMessage("Nenhuma chave pública registrada para esta instituição.");
             }
@@ -71,66 +60,53 @@ export function AddInstitutionPublicKey(): JSX.Element {
         }
     }, [institutionData, hasCheckedExistingPK]);
 
-    // Função para recuperar a PK a partir da assinatura
-    const recoverAndSetPublicKey = useCallback(async (sig: Hex) => {
-        if (!connectedAddress) return;
-        setStatusMessage("Derivando chave pública da assinatura...");
-        try {
-            const recoveredPK = await recoverPublicKey({ 
-                hash: MESSAGE_HASH, 
-                signature: sig,
-            });
-            const publicKeyXY = recoveredPK.slice(4); // Remove 0x04 para o formato X+Y (128 chars)
-            
-            setDerivedPublicKey(recoveredPK);
-            setDerivedPublicKeyXY(publicKeyXY);
-            setStatusMessage("Chave pública derivada com sucesso! Clique em 'Registrar' para salvar no contrato.");
-            setError(null); // Limpa erros anteriores
-        } catch (err: any) {
-            const msg = `Erro ao recuperar chave: ${err.message || String(err)}`;
-            setStatusMessage(msg);
-            setError(msg);
-            console.error("ERRO ao recuperar PK via assinatura:", err);
-        }
-    }, [connectedAddress]);
-
-
-    // Efeito para disparar a recuperação assim que a assinatura estiver pronta
-    useEffect(() => {
-        if (signature && !derivedPublicKey) { // Só recupera se houver assinatura e nenhuma PK ainda
-            recoverAndSetPublicKey(signature);
-        }
-    }, [signature, derivedPublicKey, recoverAndSetPublicKey]);
-
-
-    // Inicia o processo de assinatura
-    const handleDerivePublicKey = () => {
-        if (!connectedAddress || isSigning) return;
+    // Função para derivar a chave pública a partir da chave privada inserida
+    const derivePublicKeyFromPrivate = useCallback(() => {
         setError(null);
-        setStatusMessage("Aguardando confirmação na carteira para assinar mensagem e derivar a Chave Pública...");
-        signMessage({ message: RECOVERY_MESSAGE }); 
-    };
+        if (!privateKeyInput || privateKeyInput.length !== 66) { // Chave privada hex tem 66 caracteres (0x + 64 chars)
+            setError("Por favor, insira uma chave privada hexadecimal válida (64 caracteres + '0x').");
+            setDerivedPublicKey(null);
+            return;
+        }
 
-    // Função para enviar a PK para o contrato
+        try {
+            const privateKeyBytes = hexToBytes(privateKeyInput);
+            // secp.getPublicKey retorna a chave pública NÃO COMPRIMIDA (0x04...)
+            const publicKeyBytes = secp.getPublicKey(privateKeyBytes, false); 
+            const publicKeyHex = bytesToHex(publicKeyBytes) as Hex;
+
+            setDerivedPublicKey(publicKeyHex);
+            setStatusMessage("Chave pública derivada com sucesso da chave privada inserida!");
+        } catch (err: any) {
+            const msg = `Erro ao derivar chave pública da chave privada: ${err.message || String(err)}`;
+            setError(msg);
+            setStatusMessage(msg);
+            console.error("ERRO ao derivar PK da chave privada:", err);
+            setDerivedPublicKey(null);
+        }
+    }, [privateKeyInput]);
+
+    // Inicia o processo de registro no contrato
     const handleRegisterPublicKey = () => {
         if (!connectedAddress || !derivedPublicKey) {
             setStatusMessage("Erro: Chave pública não derivada ou carteira desconectada.");
             return;
         }
 
-        // Se a chave pública já está lá, evite a transação de novo
-        if (institutionData?.publicKey && institutionData.publicKey.length > 2) {
-            setStatusMessage("Chave pública já registrada no contrato!");
+        // Se a chave pública já está lá E é a mesma que tentamos registrar, evite a transação de novo
+        if (institutionData?.publicKey && institutionData.publicKey === derivedPublicKey) {
+            setStatusMessage("A mesma chave pública já está registrada no contrato!");
             return;
         }
-
+        
+        console.log("Registrando chave pública no contrato:", derivedPublicKey);
         setStatusMessage("Aguardando confirmação na carteira para registrar a Chave Pública no contrato...");
         writeContract({
             ...wagmiContractConfig,
             functionName: 'addInstitutionPublicKey',
             args: [
                 connectedAddress, 
-                derivedPublicKey,   
+                derivedPublicKey,  
             ],
         });
     };
@@ -143,21 +119,42 @@ export function AddInstitutionPublicKey(): JSX.Element {
         }
     }, [isTxConfirmed, fetchInstitutionData]);
 
-    const isButtonDisabled = isSigning || isTxPending || isTxConfirming || !connectedAddress || isLoadingInstitutionData;
+    const isButtonDisabled = isTxPending || isTxConfirming || !connectedAddress || isLoadingInstitutionData;
     const isPkAlreadyRegistered: boolean = !!derivedPublicKey && institutionData?.publicKey === derivedPublicKey;
-
 
     return (
         <div style={{ marginTop: '1.5rem', border: '1px solid #007bff', padding: '1rem', borderRadius: '4px' }}>
-            <h2>Adicionar Chave Pública de Criptografia da Instituição</h2>
+            <h2>Gerenciar Chave Pública de Criptografia da Instituição</h2>
             <p className="text-sm" style={{ marginBottom: '10px', color: 'gray' }}>
-                Esta chave será usada para criptografar dados privados destinados à auditoria da Instituição.
+                Insira a chave privada da sua Instituição para derivar e registrar a chave pública correspondente no contrato.
             </p>
 
             {!connectedAddress ? (
                 <p className="text-yellow-400">Por favor, conecte sua carteira para gerenciar a chave pública.</p>
             ) : (
                 <>
+                    {/* Input para a chave privada */}
+                    <div style={{ marginBottom: '1rem' }}>
+                        <label htmlFor="privateKey" style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
+                            Chave Privada da Instituição (Hex):
+                        </label>
+                        <input
+                            id="privateKey"
+                            type="text"
+                            value={privateKeyInput}
+                            onChange={(e) => setPrivateKeyInput(e.target.value as Hex)}
+                            placeholder="Ex: 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
+                            style={{ width: '100%', padding: '0.5rem', border: '1px solid #ccc', borderRadius: '4px', boxSizing: 'border-box' }}
+                        />
+                        <button
+                            onClick={derivePublicKeyFromPrivate}
+                            disabled={!privateKeyInput || privateKeyInput.length !== 66 || isButtonDisabled}
+                            style={{ marginTop: '0.5rem', padding: '0.5rem 1rem', backgroundColor: '#6c757d', color: 'white', border: 'none', borderRadius: '4px', opacity: isButtonDisabled || !privateKeyInput || privateKeyInput.length !== 66 ? 0.5 : 1 }}
+                        >
+                            Derivar Chave Pública
+                        </button>
+                    </div>
+
                     {/* Exibe a chave se já estiver disponível (derivada ou do contrato) */}
                     {derivedPublicKey && (
                         <div style={{ marginBottom: '1rem', padding: '0.5rem', backgroundColor: '#e9f7ef', borderRadius: '4px', border: '1px solid #d0f0d0' }}>
@@ -167,34 +164,22 @@ export function AddInstitutionPublicKey(): JSX.Element {
                         </div>
                     )}
 
-                    {/* Botão para Derivar a Chave (via assinatura) */}
-                    {!derivedPublicKey || !isPkAlreadyRegistered ? (
-                        <button
-                            onClick={handleDerivePublicKey}
-                            disabled={isButtonDisabled || isSigning}
-                            style={{ padding: '0.5rem 1rem', backgroundColor: '#007bff', color: 'white', border: 'none', borderRadius: '4px', opacity: isButtonDisabled ? 0.5 : 1, marginRight: '10px' }}
-                        >
-                            {isSigning ? "Assinando Mensagem..." : "1. Derivar Chave Pública (Assinar)"}
-                        </button>
-                    ) : null}
-
                     {/* Botão para Registrar a Chave no Contrato */}
                     {derivedPublicKey && !isPkAlreadyRegistered && (
                         <button
-                        onClick={handleRegisterPublicKey}
-                        // CORREÇÃO AQUI: !!derivedPublicKey garante que o tipo seja boolean
-                        disabled={isButtonDisabled || !derivedPublicKey || isPkAlreadyRegistered} 
-                        style={{ padding: '0.5rem 1rem', backgroundColor: '#28a745', color: 'white', border: 'none', borderRadius: '4px', opacity: isButtonDisabled ? 0.5 : 1 }}
-                    >
-                        {isTxPending ? "Aguardando Transação..." : (isTxConfirming ? "Confirmando..." : "2. Registrar Chave Pública no Contrato")}
-                    </button>
+                            onClick={handleRegisterPublicKey}
+                            disabled={isButtonDisabled || !derivedPublicKey} 
+                            style={{ padding: '0.5rem 1rem', backgroundColor: '#28a745', color: 'white', border: 'none', borderRadius: '4px', opacity: isButtonDisabled || !derivedPublicKey ? 0.5 : 1 }}
+                        >
+                            {isTxPending ? "Aguardando Transação..." : (isTxConfirming ? "Confirmando..." : "Registrar Chave Pública no Contrato")}
+                        </button>
                     )}
 
                     {/* Mensagens de Feedback */}
-                    {statusMessage && <p style={{ marginTop: '0.8rem', color: writeError || signError ? 'red' : 'inherit' }}>
+                    {statusMessage && <p style={{ marginTop: '0.8rem', color: writeError || error ? 'red' : 'inherit' }}>
                         {statusMessage}
                     </p>}
-                    {signError && <p style={{ color: 'red' }}>Erro na assinatura: {(signError as BaseError).shortMessage || signError.message}</p>}
+                    {error && <p style={{ color: 'red' }}>Erro: {error}</p>}
                     {writeError && <p style={{ color: 'red' }}>Erro no contrato: {(writeError as BaseError).shortMessage || writeError.message}</p>}
                 </>
             )}

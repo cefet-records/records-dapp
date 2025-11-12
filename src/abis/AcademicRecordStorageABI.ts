@@ -422,6 +422,11 @@ const AcademicRecordStorageABI = [
         "inputs": [
             {
                 "internalType": "string",
+                "name": "_selfEncryptedInformation",
+                "type": "string"
+            },
+            {
+                "internalType": "string",
                 "name": "_encryptedInformation",
                 "type": "string"
             },
@@ -437,29 +442,6 @@ const AcademicRecordStorageABI = [
             }
         ],
         "name": "addStudentInformation",
-        "outputs": [],
-        "stateMutability": "nonpayable",
-        "type": "function"
-    },
-    {
-        "inputs": [
-            {
-                "internalType": "address",
-                "name": "_studentAddress",
-                "type": "address"
-            },
-            {
-                "internalType": "address",
-                "name": "_institutionAddress",
-                "type": "address"
-            },
-            {
-                "internalType": "string",
-                "name": "_encryptedInformation",
-                "type": "string"
-            }
-        ],
-        "name": "confirmStudentInformation",
         "outputs": [],
         "stateMutability": "nonpayable",
         "type": "function"

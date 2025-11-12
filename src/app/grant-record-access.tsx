@@ -1,190 +1,215 @@
-// src/components/GrantAccess.tsx
 'use client';
 
-import React, { useState } from 'react';
-import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt, type BaseError } from 'wagmi';
-import { wagmiContractConfig } from '@/abis/AcademicRecordStorageABI'; // ABI do contrato
-import { Hex, Address, recoverPublicKey, keccak256, toBytes } from 'viem';
-import { decryptECIES, encryptECIES } from "@/utils/cripto.utils"; // Funções de criptografia
+import React, { JSX, useState, useEffect } from "react";
+import { useReadContract, useAccount, type BaseError } from "wagmi";
+import { wagmiContractConfig } from "@/abis/AcademicRecordStorageABI";
+import { Address, isAddress, Hex, keccak256, toBytes } from "viem";
+import { decryptECIES, encryptECIES } from "@/utils/cripto.utils"; // Nossas funções ECIES
 
-// Interface para os dados do formulário
-interface GrantAccessForm {
-    recordId: Hex;
-    visitorAddress: Address;
-    visitorPublicKey: Hex; // Chave pública do visitante (0x04...)
-    studentPrivateKey: Hex; // Chave privada do aluno conectado
+// Interfaces como antes
+interface StudentContractData {
+    studentAddress: Address;
+    selfEncryptedInformation: Hex;      
+    institutionEncryptedInformation: Hex; 
+    publicKey: Hex; 
+    publicHash: Hex;
 }
 
-export default function GrantAccess() {
-    const { address: studentAddress, isConnected } = useAccount();
-    const [formData, setFormData] = useState<GrantAccessForm>({
-        recordId: '0x' as Hex,
-        visitorAddress: '0x' as Address,
-        visitorPublicKey: '0x' as Hex,
-        studentPrivateKey: '0x' as Hex,
-    });
-    
-    const [statusMessage, setStatusMessage] = useState<string | null>(null);
-    const [errorMessage, setErrorMessage] = useState<string | null>(null);
-    const [isLoadingProcessing, setIsLoadingProcessing] = useState(false);
-    const [payloadForTx, setPayloadForTx] = useState<{ recordId: Hex, visitorAddress: Address, encryptedKeyVisitor: Hex } | null>(null);
-    
-    // Wagmi hooks para a transação
-    const { data: hash, error: writeError, isPending: isTxPending, writeContract } = useWriteContract();
-    const { isLoading: isTxConfirming, isSuccess: isTxConfirmed } = useWaitForTransactionReceipt({ hash });
+interface PersonalInformation {
+    name: string;
+    document: string;
+    salt: string;
+}
 
-    // 1. Hook para buscar o registro do aluno para validação
-    const { data: recordData, isLoading: isLoadingRecord } = useReadContract({
+export function GrantVisitorAccess(): JSX.Element {
+    const { address: connectedAddress, isConnected } = useAccount(); // Deve ser o aluno
+
+    const [studentAddressInput, setStudentAddressInput] = useState<Address | ''>('');
+    const [visitorPublicKeyInput, setVisitorPublicKeyInput] = useState<Hex | ''>(''); // Chave pública secp256k1 do visitante
+    const [encryptedDataForVisitor, setEncryptedDataForVisitor] = useState<Hex | null>(null);
+    const [status, setStatus] = useState<string | null>(null);
+    const [error, setError] = useState<string | null>(null);
+    const [isLoadingAccess, setIsLoadingAccess] = useState<boolean>(false);
+
+    const studentAddressValid = isAddress(studentAddressInput);
+    const visitorPublicKeyValid = visitorPublicKeyInput.startsWith('0x') && (visitorPublicKeyInput.length === 66 || visitorPublicKeyInput.length === 130); // 33 bytes comprimido ou 65 bytes não comprimido + '0x'
+
+    const { 
+        data: contractStudentData, 
+        isLoading: isLoadingStudent, 
+        isError: isContractReadError, 
+        error: contractReadError,
+        refetch: refetchStudentData
+    } = useReadContract({
         ...wagmiContractConfig,
-        functionName: 'records',
-        args: [formData.recordId],
-        query: {
-            enabled: formData.recordId.length === 66 && formData.recordId.startsWith('0x'),
-            staleTime: 5000,
-        }
+        functionName: 'getStudent', 
+        args: studentAddressValid ? [studentAddressInput] : undefined,
+        query: { enabled: studentAddressValid, staleTime: 1_000 }
     });
 
-    // Função de lógica de Recifragem
-    const processRecryption = async () => {
-        if (!studentAddress) return;
-        if (isTxPending || isLoadingProcessing) return;
-        
-        setStatusMessage(null);
-        setErrorMessage(null);
-        setIsLoadingProcessing(true);
-        setPayloadForTx(null); // Limpar payload anterior
-        
+    const handleGrantAccess = async () => {
+        if (!isConnected || !connectedAddress) {
+            setError("Conecte a carteira do ALUNO para conceder acesso.");
+            return;
+        }
+        if (connectedAddress !== studentAddressInput) {
+            setError("Você deve estar conectado com a carteira do ALUNO para conceder acesso aos seus dados.");
+            return;
+        }
+        if (!studentAddressValid || !visitorPublicKeyValid) {
+            setError("Por favor, insira um endereço de estudante válido e uma chave pública de visitante válida.");
+            return;
+        }
+
+        setStatus("Buscando dados do estudante e preparando para re-criptografar...");
+        setError(null);
+        setEncryptedDataForVisitor(null);
+        setIsLoadingAccess(true);
+
         try {
-            // --- VALIDAÇÃO CRÍTICA DOS DADOS DE ENTRADA ---
-            if (formData.recordId.length !== 66 || !formData.recordId.startsWith('0x')) throw new Error("ID do Registro inválido.");
-            if (formData.studentPrivateKey.length !== 66 || !formData.studentPrivateKey.startsWith('0x')) throw new Error("Chave Privada inválida.");
-            if (formData.visitorPublicKey.length < 130) throw new Error("Chave Pública do Visitante inválida (tamanho).");
-            
-            // 1. Verificação de Propriedade do Registro (Off-chain)
-            const record = recordData as any; // Assumindo que recordData é a tupla da struct
-            if (!record || record[1]?.toLowerCase() !== studentAddress.toLowerCase()) { // record[1] é o studentAddress na tupla
-                throw new Error("Permissão negada. Você não é o proprietário do registro.");
-            }
-            
-            setStatusMessage("1. Descriptografando Chave AES K...");
+            const { data: fetchedContractData, error: fetchError } = await refetchStudentData();
 
-            // 2. DESCRIPTOGRAFIA: Aluno usa sua Chave Privada para obter a Chave AES K Original
-            const encryptedKeyStudent = record[5] as Hex; // record[5] é encryptedKeyStudent
-            const aesKeyBytes = await decryptECIES(encryptedKeyStudent, formData.studentPrivateKey);
-            
-            if (aesKeyBytes.length !== 32) { // AES-256 Key deve ter 32 bytes
-                throw new Error("Falha na descriptografia ECIES: Chave AES inválida.");
+            if (fetchError) {
+                throw new Error(`Erro ao buscar dados do contrato: ${(fetchError as unknown as BaseError).shortMessage || fetchError.message}`);
             }
-            
-            setStatusMessage("2. Recifrando Chave AES K para o Visitante...");
-
-            // 3. RECIFRAGEM: Cifra a Chave AES K Original com a Chave Pública do Visitante (ECIES)
-            const encryptedKeyVisitor = await encryptECIES(aesKeyBytes, formData.visitorPublicKey);
-            
-            if (encryptedKeyVisitor.length < 100) { // Verifica se a ECIES retornou algo válido
-                 throw new Error("Falha na recifragem: Payload ECIES muito curto.");
+            if (!fetchedContractData) {
+                throw new Error("Nenhum dado de estudante encontrado para o endereço fornecido.");
             }
 
-            setStatusMessage("3. Payload pronto. Aguardando Confirmação na Carteira.");
+            const student = fetchedContractData as unknown as StudentContractData;
+            const encryptedForSelf = student.selfEncryptedInformation;
+
+            if (!encryptedForSelf || encryptedForSelf === '0x') {
+                throw new Error("Payload de dados cifrados para o próprio aluno não encontrado no contrato.");
+            }
+
+            // *** AQUI É O PONTO CRÍTICO NOVAMENTE ***
+            // Para o aluno descriptografar seus próprios dados, ele precisa da sua chave privada.
+            // Se você não quiser pedir ao usuário (o ideal), e não estiver usando `eth_decrypt` (que é x25519),
+            // a carteira (Dynamic/Metamask) precisaria expor uma API de descriptografia para chaves secp256k1.
+            // Atualmente, tal API não é padrão.
+            // PARA DEMONSTRAÇÃO/TESTE, ASSUMO QUE VOCÊ TEM UMA FORMA SEGURA DE OBTER A CHAVE PRIVADA
+            // DO `connectedAddress` (ALUNO) PARA O `decryptECIES`. ISSO NÃO É PARA PRODUÇÃO.
+
+            // EXEMPLO (NÃO SEGURO PARA PROD):
+            const studentPrivateKey = '0x...'; // VOCÊ PRECISA DE UMA FORMA DE OBTER ISSO AQUI
+            if (!studentPrivateKey) {
+                throw new Error("Chave privada do aluno não disponível para descriptografia interna.");
+            }
+            const decryptedPersonalInformationJson = await decryptECIES(encryptedForSelf, studentPrivateKey);
+
+            // throw new Error("Para conceder acesso, o aluno precisa primeiro descriptografar seus próprios dados. Isso requer acesso à chave privada do aluno, o que é um risco de segurança. Considere alternativas como links de acesso temporários ou DIDs para visitantes.");
             
-            // 4. Prepara o Payload para a Transação
-            setPayloadForTx({
-                recordId: formData.recordId,
-                visitorAddress: formData.visitorAddress,
-                encryptedKeyVisitor: encryptedKeyVisitor,
-            });
+            
+            // Se a descriptografia for bem-sucedida, continue:
+            const personalInfo: PersonalInformation = JSON.parse(decryptedPersonalInformationJson);
+            const informationString = JSON.stringify(personalInfo);
+
+            // Re-criptografar os dados para a chave pública do visitante
+            setStatus("Re-criptografando os dados para o visitante...");
+            const reEncryptedForVisitor = await encryptECIES(informationString, visitorPublicKeyInput as Hex);
+            
+            setEncryptedDataForVisitor(reEncryptedForVisitor);
+            setStatus("Dados re-criptografados para o visitante com sucesso! Compartilhe o payload Hex abaixo.");
+
+            console.log("Payload ECIES para o visitante:", reEncryptedForVisitor);
+            
 
         } catch (err: any) {
-            setErrorMessage(`Falha no Processamento: ${err.message || String(err)}`);
-            console.error("ERRO COMPARTILHAMENTO:", err);
+            console.error("Erro ao conceder acesso:", err);
+            setStatus(null);
+            setError(`Falha ao conceder acesso: ${err.message || String(err)}`);
         } finally {
-            setIsLoadingProcessing(false);
+            setIsLoadingAccess(false);
         }
     };
-    
-    // Função para enviar a transação
-    const handleGrantAccess = () => {
-        if (!payloadForTx) return;
 
-        writeContract({
-            ...wagmiContractConfig,
-            functionName: 'grantVisitorAccess',
-            args: [
-                payloadForTx.recordId,
-                payloadForTx.visitorAddress,
-                payloadForTx.encryptedKeyVisitor
-            ],
-        });
-        setStatusMessage("Transação enviada. Aguardando mineração...");
-    };
+    useEffect(() => {
+        setEncryptedDataForVisitor(null);
+        setStatus(null);
+        setError(null);
+    }, [studentAddressInput, visitorPublicKeyInput]);
 
     return (
-        <div className="bg-gray-900 p-6 rounded-xl text-white">
-            <h2 className="text-xl font-bold mb-4 border-b border-gray-700 pb-2">Conceder Acesso ao Visitante (Aluno)</h2>
-            <p className="text-sm text-yellow-400 mb-4">
-                ATENÇÃO: Este processo usa sua Chave Privada localmente para recifrar a Chave AES K.
+        <div style={{ marginTop: '1.5rem', border: '1px solid #007bff', padding: '1rem', borderRadius: '4px' }}>
+            <h2>Conceder Acesso a Visitantes (Aluno)</h2>
+            <p className="text-sm" style={{ marginBottom: '10px', color: 'gray' }}>
+                Como aluno, você pode re-criptografar seus dados para uma chave pública de visitante, permitindo que eles descriptografem.
             </p>
-            <div className="space-y-4">
-                <div>
-                    <label className="block text-sm font-medium text-gray-400">ID do Registro</label>
-                    <input 
-                        type="text" value={formData.recordId} 
-                        onChange={(e) => setFormData({...formData, recordId: e.target.value as Hex})} 
-                        placeholder="0x..." className="w-full p-2 mt-1 bg-gray-700 border border-gray-600 rounded" 
-                    />
-                </div>
-                <div>
-                    <label className="block text-sm font-medium text-gray-400">Endereço do Visitante</label>
-                    <input 
-                        type="text" value={formData.visitorAddress} 
-                        onChange={(e) => setFormData({...formData, visitorAddress: e.target.value as Address})} 
-                        placeholder="0x..." className="w-full p-2 mt-1 bg-gray-700 border border-gray-600 rounded" 
-                    />
-                </div>
-                <div>
-                    <label className="block text-sm font-medium text-gray-400">Chave Pública do Visitante (0x04...)</label>
-                    <input 
-                        type="text" value={formData.visitorPublicKey} 
-                        onChange={(e) => setFormData({...formData, visitorPublicKey: e.target.value as Hex})} 
-                        placeholder="0x04..." className="w-full p-2 mt-1 bg-gray-700 border border-gray-600 rounded" 
-                    />
-                </div>
-                <div className="pt-2 border-t border-gray-700">
-                    <label className="block text-sm font-medium text-red-400">Sua Chave Privada (Aluno)</label>
-                    <input 
-                        type="password" value={formData.studentPrivateKey} 
-                        onChange={(e) => setFormData({...formData, studentPrivateKey: e.target.value as Hex})} 
-                        placeholder="0x..." className="w-full p-2 mt-1 bg-gray-700 border border-red-500 rounded" 
-                    />
-                </div>
-            </div>
-            <div className="mt-6 space-y-3">
-                <button
-                    onClick={processRecryption}
-                    disabled={isTxPending || isLoadingProcessing || !studentAddress || !recordData}
-                    className="w-full py-2 bg-yellow-600 hover:bg-yellow-700 text-white font-semibold rounded disabled:opacity-50"
-                >
-                    {isLoadingProcessing ? "Processando Chaves..." : (payloadForTx ? "Recifragem Concluída" : "Processar Recifragem")}
-                </button>
 
-                {payloadForTx && (
-                    <button
+            {!isConnected || !connectedAddress ? (
+                <p style={{ color: 'orange', marginBottom: '1rem' }}>⚠️ Conecte sua carteira de ALUNO para conceder acesso.</p>
+            ) : (
+                <form className="form space-y-3">
+                    <input
+                        type="text"
+                        placeholder="Seu Endereço de Estudante"
+                        value={studentAddressInput}
+                        onChange={(e) => {
+                            setStudentAddressInput(e.target.value as Address | '');
+                            setStatus(null);
+                            setError(null);
+                            setEncryptedDataForVisitor(null);
+                        }}
+                        className="w-full p-2 border rounded"
+                    />
+
+                    {!studentAddressValid && studentAddressInput !== '' && (
+                        <p className="text-sm text-red-500">⚠️ Endereço de estudante inválido.</p>
+                    )}
+                    {connectedAddress !== studentAddressInput && studentAddressInput !== '' && (
+                        <p className="text-sm text-red-500">⚠️ A carteira conectada não é a do estudante informado.</p>
+                    )}
+
+                    <input
+                        type="text"
+                        placeholder="Chave Pública do Visitante (Hex, secp256k1)"
+                        value={visitorPublicKeyInput}
+                        onChange={(e) => {
+                            setVisitorPublicKeyInput(e.target.value as Hex | '');
+                            setStatus(null);
+                            setError(null);
+                            setEncryptedDataForVisitor(null);
+                        }}
+                        className="w-full p-2 border rounded"
+                        style={{ marginTop: '10px' }}
+                    />
+                     {!visitorPublicKeyValid && visitorPublicKeyInput !== '' && (
+                        <p className="text-sm text-red-500">⚠️ Chave pública de visitante inválida. Deve ser um Hex (0x...) de 66 ou 130 caracteres.</p>
+                    )}
+
+                    <button 
+                        type="button" 
                         onClick={handleGrantAccess}
-                        disabled={isTxPending || isTxConfirming}
-                        className="w-full py-2 bg-green-600 hover:bg-green-700 text-white font-semibold rounded disabled:opacity-50"
+                        disabled={isLoadingStudent || isLoadingAccess || !studentAddressValid || !visitorPublicKeyValid || connectedAddress !== studentAddressInput}
+                        style={{ padding: '0.5rem 1rem', backgroundColor: '#007bff', color: 'white', borderRadius: '4px', opacity: (isLoadingStudent || isLoadingAccess || !studentAddressValid || !visitorPublicKeyValid || connectedAddress !== studentAddressInput) ? 0.6 : 1, marginTop: '10px' }}
                     >
-                        {isTxPending || isTxConfirming ? "Confirmando na Blockchain..." : "Assinar e Conceder Acesso"}
+                        {isLoadingAccess ? "Processando..." : isLoadingStudent ? "Buscando Dados..." : "Gerar Acesso para Visitante"}
                     </button>
-                )}
-            </div>
+                </form>
+            )}
 
-            <div className="mt-4 text-sm space-y-2">
-                {errorMessage && <p className="text-red-500 break-all">ERRO: {errorMessage}</p>}
-                {statusMessage && <p className="text-blue-400">STATUS: {statusMessage}</p>}
-                {isTxConfirmed && <p className="text-green-500 font-bold">ACESSO CONCEDIDO COM SUCESSO! Hash: {hash?.substring(0, 10)}...</p>}
-                {isTxPending && hash && <p className="text-yellow-500">Transação enviada: {(hash as Hex).substring(0, 10)}...</p>}
-                {isLoadingRecord && <p className="text-gray-400">Buscando dados do registro...</p>}
-            </div>
+            {status && <p style={{ marginTop: '0.8rem', color: 'green', fontWeight: 'bold' }}>{status}</p>}
+            {error && <p style={{ color: 'red', marginTop: '0.8rem' }}>Erro: {error}</p>}
+            {isContractReadError && <p style={{ color: 'red' }}>Erro ao ler contrato: {(contractReadError as unknown as BaseError).shortMessage || contractReadError.message}</p>}
+
+            {encryptedDataForVisitor && (
+                <div style={{ marginTop: '1.5rem', padding: '1rem', border: '1px solid #ddd', borderRadius: '4px', backgroundColor: '#f9f9f9', wordBreak: 'break-all' }}>
+                    <h3>✅ Dados Cifrados para Visitante:</h3>
+                    <p>Copie o payload abaixo e forneça-o ao visitante para que ele possa descriptografar com sua chave privada correspondente.</p>
+                    <textarea 
+                        readOnly 
+                        value={encryptedDataForVisitor} 
+                        style={{ width: '100%', height: '150px', marginTop: '0.5rem', fontFamily: 'monospace', padding: '0.5rem', border: '1px solid #ced4da', borderRadius: '4px' }}
+                    />
+                    <button 
+                        onClick={() => navigator.clipboard.writeText(encryptedDataForVisitor)} 
+                        style={{ marginTop: '0.5rem', padding: '0.5rem 1rem', backgroundColor: '#6c757d', color: 'white', borderRadius: '4px', border: 'none', cursor: 'pointer' }}
+                    >
+                        Copiar Payload
+                    </button>
+                </div>
+            )}
         </div>
     );
 }
