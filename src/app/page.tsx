@@ -4,14 +4,7 @@ import { DynamicWidget, useDynamicContext } from "@dynamic-labs/sdk-react-core";
 import { ReadContract } from "./read-contract";
 import CheckInstitutionStatus from "./institution/is-institution";
 import AddInstitution from "./institution/add-institution";
-import RegisterBatchRecords from "./add-batch-record";
-import DisplayRegisteredRecords from "./get-batch-record";
-import DecryptRecord from "./decrypt-record";
-import PublicKeyRecovery from "./get-pk";
 import { useAccount} from "wagmi";
-import { Hex } from "viem";
-import ViewGrantedAccess from "./view-granted-record-access";
-import RevokeAccess from "./revoke-access";
 import AddStudent from "./student/add-student";
 import { AddInstitutionPublicKey } from "./institution/add-institution-pk";
 import { GetInstitutionDetails } from "./institution/get-institution";
@@ -27,21 +20,39 @@ import { AddGrade } from "./grade/add-grade";
 import { GetGrade } from "./grade/get-grade";
 import { RequestAccess } from "./visitor/request-access";
 import { AllowAccessToAddress } from "./student/allow-access-to-address";
+import { isEthereumWallet } from '@dynamic-labs/ethereum';
 
 function AccountInfo() {
   const { primaryWallet } = useDynamicContext();
   const { isConnected, chain } = useAccount();
-  const [exportStatus, setExportStatus] = useState<string | null>(null);
   const { initExportProcess } = useEmbeddedReveal();
 
-  const [hasMounted, setHasMounted] = useState(false); // NOVO ESTADO
+  const [hasMounted, setHasMounted] = useState(false);
+  const [exportStatus, setExportStatus] = useState<string | null>(null);
 
-  useEffect(() => {
-    setHasMounted(true); // Define como true apenas quando o componente monta no cliente
-  }, []);
+  useEffect(() => setHasMounted(true), []);
 
-  const getPrivateKey = async () => {
-    // ... (seu código de getPrivateKey permanece o mesmo) ...
+  const getUserInfo = async () => {
+    // Adicionar verificação para primaryWallet
+    if (!primaryWallet) {
+      console.warn("primaryWallet é nula, não é possível obter PublicClient ou WalletClient.");
+      // Opcional: Definir uma mensagem de status para o usuário
+      setExportStatus("Erro: Carteira não conectada ou não disponível.");
+      return;
+    }
+
+    try {
+      if (!isEthereumWallet(primaryWallet)) return;
+      const publicClient = await primaryWallet.getPublicClient()
+      const walletClient = await primaryWallet.getWalletClient();
+
+      console.log("publicClient", publicClient);
+      console.log("walletClient", walletClient);
+      setExportStatus("✅ Informações da carteira obtidas com sucesso!"); // Sucesso
+    } catch (error) {
+      console.error("Erro ao obter informações da primaryWallet:", error);
+      setExportStatus(`❌ Erro ao obter informações da carteira: ${error instanceof Error ? error.message : String(error)}`); // Captura de erro
+    }
   };
 
   if (!hasMounted) {
@@ -51,7 +62,6 @@ function AccountInfo() {
   return (
     <div style={{ marginTop: '1rem', border: '1px solid #ccc', padding: '1rem', borderRadius: '4px' }}>
       <h3>Status da Carteira</h3>
-      {/* Agora, estes parágrafos só serão renderizados após a hidratação */}
       <p>wagmi connected: {isConnected ? 'true' : 'false'}</p>
       <p>wagmi address: {primaryWallet?.address}</p>
       <p>wagmi network: {chain?.id}</p>
@@ -59,11 +69,11 @@ function AccountInfo() {
       {primaryWallet?.connector && isDynamicWaasConnector(primaryWallet.connector) && (
         <div style={{ marginTop: '10px' }}>
           <button
-            onClick={getPrivateKey}
+            onClick={getUserInfo}
             style={{ padding: '8px 15px', backgroundColor: '#dc3545', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
             disabled={!isConnected}
           >
-            Exportar Chave Privada (Teste)
+            informações da primaryWallet
           </button>
           {exportStatus && <p style={{ marginTop: '5px', fontSize: '0.8em', color: exportStatus.startsWith('✅') ? 'green' : 'red' }}>{exportStatus}</p>}
         </div>
@@ -73,14 +83,6 @@ function AccountInfo() {
 }
 
 export default function Home() {
-  
-
-  const [pageStatusMessage, setPageStatusMessage] = useState<string | null>(null);
-  const handlePublicKeyRecovered = (publicKey: Hex, address: Hex) => {
-    console.log(`Chave Pública Recuperada no Home: ${publicKey} para o endereço: ${address}`);
-    // Se você precisasse passar essa chave para outro componente que o Home renderiza,
-    // você armazenaria aqui num estado e passaria como prop.
-  };
   return (
     <div>
       <DynamicWidget />
@@ -106,17 +108,6 @@ export default function Home() {
 
       <RequestAccess />
       <AllowAccessToAddress />
-      {/*<RegisterBatchRecords />
-      <DisplayRegisteredRecords />
-      <DecryptRecord />
-      <GrantAccess />
-      <RevokeAccess />
-      <ViewGrantedAccess />
-      <PublicKeyRecovery
-        title="Chave Pública do Usuário Conectado" // Título para exibir no componente
-        onPublicKeyReady={handlePublicKeyRecovered} // Função de callback
-      />
-       */}
     </div>   
   );
 }
