@@ -7,6 +7,7 @@ import { WagmiProvider } from "wagmi";
 import { config } from "@/config/wagmi.config";
 import { DynamicWagmiConnector } from "@dynamic-labs/wagmi-connector";
 import { evmNetworks } from "@/config/chains.config";
+import HeaderPage from "@/components/header/header-page";
 
 const queryClient = new QueryClient();
 
