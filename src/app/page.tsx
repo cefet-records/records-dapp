@@ -6,13 +6,11 @@ import CheckInstitutionStatus from "./institution/is-institution";
 import AddInstitution from "./institution/add-institution";
 import { useAccount} from "wagmi";
 import AddStudent from "./student/add-student";
-import { AddInstitutionPublicKey } from "./institution/add-institution-pk";
 import { GetInstitutionDetails } from "./institution/get-institution";
 import { AddStudentInformation } from "./student/add-student-information";
 import { useState, useEffect } from "react";
 import { isDynamicWaasConnector } from '@dynamic-labs/wallet-connector-core';
 import { useEmbeddedReveal } from "@dynamic-labs/sdk-react-core";
-import { ImportExistingWallet } from "./import-wallet";
 import { GetStudent } from "./student/get-student";
 import { AddCourse } from "./course/add-course";
 import { AddDiscipline } from "./discipline/add-discipline";
@@ -48,6 +46,7 @@ function AccountInfo() {
 
       console.log("publicClient", publicClient);
       console.log("walletClient", walletClient);
+      
       setExportStatus("✅ Informações da carteira obtidas com sucesso!"); // Sucesso
     } catch (error) {
       console.error("Erro ao obter informações da primaryWallet:", error);
@@ -86,13 +85,9 @@ export default function Home() {
   return (
     <div>
       <DynamicWidget />
-      <AccountInfo />
-      <ImportExistingWallet />
-      <ReadContract />
 
       <AddInstitution />
       <CheckInstitutionStatus />
-      <AddInstitutionPublicKey />
       <GetInstitutionDetails />
 
       <AddStudent />

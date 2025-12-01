@@ -1,20 +1,20 @@
 'use client';
 
-import React, { JSX, useState, useEffect, useCallback } from "react";
-import { 
-    useWriteContract, 
-    useWaitForTransactionReceipt, 
-    useReadContract, 
-    useAccount, 
-    type BaseError 
+import React, { JSX, useState, useEffect, FormEvent } from "react";
+import {
+    useWriteContract,
+    useWaitForTransactionReceipt,
+    useReadContract,
+    useAccount,
+    type BaseError
 } from "wagmi";
-import * as secp from "@noble/secp256k1"; 
-import { hexToBytes, bytesToHex, Address, Hex, isAddress, keccak256, toBytes } from "viem"; 
+import * as secp from "@noble/secp256k1";
+import { hexToBytes, bytesToHex, Address, Hex, isAddress, keccak256, toBytes } from "viem";
 import { wagmiContractConfig } from "@/abis/AcademicRecordStorageABI";
 import { useDynamicContext } from "@dynamic-labs/sdk-react-core";
 import { encryptECIES } from "@/utils/cripto.utils";
 import { randomBytes } from "@noble/ciphers/utils.js";
-import { Base64 } from 'js-base64'; // <<<<<<< IMPORTAR BASE64 AQUI
+import * as CryptoJS from "crypto-js";
 
 interface InstitutionContractData {
     institutionAddress: Address;
@@ -27,32 +27,37 @@ interface PersonalInformation {
     salt: string;
 }
 
-export function AddStudentInformation(): JSX.Element { 
+export function AddStudentInformation(): JSX.Element {
     const { primaryWallet } = useDynamicContext();
     const { address, isConnected } = useAccount();
 
-    const [institutionAddress, setInstitutionAddress] = useState<Address | ''>(''); 
+    const [institutionAddress, setInstitutionAddress] = useState<Address | ''>('');
     const [name, setName] = useState("");
     const [document, setDocument] = useState("");
+    const [masterPassword, setMasterPassword] = useState<string>("");
+
+    const [downloadLink, setDownloadLink] = useState<string | null>(null);
+    const [generatedStudentPublicKey, setGeneratedStudentPublicKey] = useState<Hex | null>(null);
+    const [isGeneratingKeys, setIsGeneratingKeys] = useState<boolean>(false);
+    const [keyGenerationError, setKeyGenerationError] = useState<string | null>(null);
+    const [generatedStudentPrivateKeyHex, setGeneratedStudentPrivateKeyHex] = useState<Hex | null>(null);
+
     const [status, setStatus] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
 
-    const [studentPrivateKeyInput, setStudentPrivateKeyInput] = useState<Hex | ''>(''); 
-    const [studentPublicKey, setStudentPublicKey] = useState<Hex | null>(null); 
-
-    const { data: hash, error: writeError, isPending: isTxPending, writeContract } = useWriteContract();
-    const { isLoading: isTxConfirming, isSuccess: isTxConfirmed } = useWaitForTransactionReceipt({ hash });
+    const { data: addInfoHash, error: writeError, isPending: isTxPending, writeContract } = useWriteContract();
+    const { isLoading: isTxConfirming, isSuccess: isTxConfirmed } = useWaitForTransactionReceipt({ hash: addInfoHash });
 
     const institutionAddressValid = isAddress(institutionAddress);
 
-    const { 
-        data: institutionData, 
-        isLoading: isLoadingInst, 
-        isError: isInstError, 
+    const {
+        data: institutionData,
+        isLoading: isLoadingInst,
+        isError: isInstError,
         error: instError,
     } = useReadContract({
         ...wagmiContractConfig,
-        functionName: 'getInstitution', 
+        functionName: 'getInstitution',
         args: institutionAddressValid ? [institutionAddress] : undefined,
         query: { enabled: institutionAddressValid, staleTime: 0 }
     });
@@ -60,86 +65,108 @@ export function AddStudentInformation(): JSX.Element {
     const [hasMounted, setHasMounted] = useState(false);
 
     useEffect(() => {
-      setHasMounted(true);
+        setHasMounted(true);
     }, []);
 
-    const deriveStudentPublicKeyFromPrivate = useCallback(() => {
+    const KDF_ITERATIONS = 262144;
+    const KDF_KEY_SIZE = 256 / 8;
+
+    const handleGenerateKeysAndAddInfo = async (e: FormEvent<HTMLFormElement>): Promise<void> => {
+        e.preventDefault();
+
+        // Resetar estados relevantes para uma nova tentativa
+        setKeyGenerationError(null);
+        setDownloadLink(null);
+        setGeneratedStudentPublicKey(null);
+        setGeneratedStudentPrivateKeyHex(null);
         setError(null);
-        if (!studentPrivateKeyInput || studentPrivateKeyInput.length !== 66) { 
-            setError("Por favor, insira uma chave privada hexadecimal válida (64 caracteres + '0x') para o estudante.");
-            setStudentPublicKey(null);
-            return;
-        }
-
-        try {
-            const privateKeyBytes = hexToBytes(studentPrivateKeyInput);
-            const publicKeyBytes = secp.getPublicKey(privateKeyBytes, false); 
-            const publicKeyHex = bytesToHex(publicKeyBytes) as Hex;
-
-            setStudentPublicKey(publicKeyHex);
-            setStatus("Chave pública do estudante derivada com sucesso da chave privada inserida!");
-        } catch (err: any) {
-            const msg = `Erro ao derivar chave pública do estudante da chave privada: ${err.message || String(err)}`;
-            setError(msg);
-            setStatus(msg);
-            console.error("ERRO ao derivar PK do estudante da chave privada:", err);
-            setStudentPublicKey(null);
-        }
-    }, [studentPrivateKeyInput]);
-
-    const addStudentInformation = async () => {
-        if (!institutionAddressValid || !name || !document || !address || !isConnected || !studentPublicKey) {
-            setError("Por favor, preencha todos os campos, conecte sua carteira e derive sua chave pública.");
-            setStatus(null);
-            return;
-        }
-
         setStatus(null);
-        setError(null);
-        setStatus("Iniciando processo criptográfico...");
+
+        // Validações iniciais
+        if (!masterPassword) {
+            setKeyGenerationError("Por favor, insira uma senha mestra para criptografar sua chave privada.");
+            return;
+        }
+        if (masterPassword.length < 12) {
+            setKeyGenerationError("A senha mestra deve ter pelo menos 12 caracteres.");
+            return;
+        }
+        if (!institutionAddressValid || !name || !document || !address || !isConnected) {
+            setError("Por favor, preencha todos os campos e conecte sua carteira.");
+            return;
+        }
+
+        setIsGeneratingKeys(true);
+        setStatus("Gerando par de chaves e preparando dados...");
 
         try {
-            const saltBytes = randomBytes(16); 
-            const salt = bytesToHex(saltBytes); 
-            const personalInformation: PersonalInformation = { name, document, salt };
+            // 1. Gerar Par de Chaves ECDSA (secp256k1) para o Estudante
+            const privateKeyECDSABytes = randomBytes(32);
+            const privateKeyECDSAHex = bytesToHex(privateKeyECDSABytes) as Hex;
+
+            const publicKeyECDSABytes = secp.getPublicKey(privateKeyECDSABytes, false);
+            const publicKeyECDSAHex = bytesToHex(publicKeyECDSABytes) as Hex;
+
+            setGeneratedStudentPublicKey(publicKeyECDSAHex);
+            setGeneratedStudentPrivateKeyHex(privateKeyECDSAHex);
+
+            // 2. Criptografar a Chave Privada do Estudante com a Senha Mestra (PBKDF2 + AES)
+            const saltKDF = CryptoJS.lib.WordArray.random(128 / 8);
+            const keyKDF = CryptoJS.PBKDF2(masterPassword, saltKDF, {
+                keySize: KDF_KEY_SIZE / 4,
+                iterations: KDF_ITERATIONS,
+            });
+
+            // GERAÇÃO DO IV E SUA INCLUSÃO NA CRIPTOGRAFIA E NO BACKUP
+            const iv = CryptoJS.lib.WordArray.random(128 / 8); // <<< Gerar o IV aqui
+
+            const encryptedStudentPrivateKey = CryptoJS.AES.encrypt(privateKeyECDSAHex, keyKDF, {
+                mode: CryptoJS.mode.CBC,
+                padding: CryptoJS.pad.Pkcs7,
+                iv: iv, // <<< Passar o IV para a criptografia
+            }).toString();
+
+            // 3. Preparar e oferecer o download do arquivo TXT de backup
+            const backupData = {
+                encryptedPrivateKey: encryptedStudentPrivateKey,
+                salt: saltKDF.toString(CryptoJS.enc.Hex),
+                kdfIterations: KDF_ITERATIONS,
+                iv: iv.toString(CryptoJS.enc.Hex), // <<< ADICIONAR ESTA LINHA: Salvar o IV no backup!
+            };
+            const backupContent = JSON.stringify(backupData, null, 2);
+            const blob = new Blob([backupContent], { type: "text/plain;charset=utf-8" });
+            const url = URL.createObjectURL(blob);
+            setDownloadLink(url);
+
+            // 4. Preparar dados pessoais para criptografia e envio on-chain
+            const saltPersonalDataBytes = randomBytes(16);
+            const saltPersonalDataHex = bytesToHex(saltPersonalDataBytes);
+
+            const personalInformation: PersonalInformation = { name, document, salt: saltPersonalDataHex };
             const informationString = JSON.stringify(personalInformation);
 
-            // publicHash ANTES da criptografia, a partir da informação em texto plano
-            const publicHashHex = keccak256(toBytes(informationString)); 
+            const publicHashHex = keccak256(toBytes(informationString)) as Hex;
 
             const instData = institutionData as InstitutionContractData;
             if (!instData || instData.publicKey.length < 132 || instData.publicKey === '0x') {
-                throw new Error("Chave pública da Instituição não encontrada ou é inválida. Certifique-se que a instituição existe e tem uma PK registrada.");
+                throw new Error("Chave pública da Instituição não encontrada ou é inválida. Certifique-se que a instituição existe e tem uma PK registrada no formato ECDSA Hex (0x04...).");
             }
-            // A chave pública da instituição vem do contrato como Hex, conforme a interface
             const institutionPublicKeyHex = instData.publicKey;
 
-            console.log("Public Key do Estudante (Hex):", studentPublicKey);
-            console.log("Public key da Instituição (Hex):", institutionPublicKeyHex);
-
-            // encryptECIES AGORA RETORNA STRING BASE64
-            const encryptedForSelfBase64 = await encryptECIES(informationString, studentPublicKey);
+            const encryptedForSelfBase64 = await encryptECIES(informationString, publicKeyECDSAHex);
             const encryptedForInstitutionBase64 = await encryptECIES(informationString, institutionPublicKeyHex);
-            
-            console.log("Criptografado para Estudante (Base64):", encryptedForSelfBase64);
-            console.log("Criptografado para Instituição (Base64):", encryptedForInstitutionBase64);
 
-            // <<<<<<<<<<<<<<<< CORREÇÕES ADICIONADAS AQUI >>>>>>>>>>>>>>>>>>>>>>>
-            // Converter studentPublicKey (Hex) para Base64
-            const studentPublicKeyBytes = hexToBytes(studentPublicKey);
-            const studentPublicKeyBase64 = Base64.fromUint8Array(studentPublicKeyBytes);
+            const publicHashToSubmit = publicHashHex;
 
-            const publicHashBytes = hexToBytes(publicHashHex);
-            const publicHashBase64 = Base64.fromUint8Array(publicHashBytes);
             setStatus("Aguardando confirmação na carteira para adicionar informações...");
-            writeContract({
+            await writeContract({
                 ...wagmiContractConfig,
                 functionName: 'addStudentInformation',
                 args: [
-                    encryptedForSelfBase64,           // STRING Base64
-                    encryptedForInstitutionBase64,    // STRING Base64
-                    studentPublicKeyBase64,           // STRING Base64 (corrigido)
-                    publicHashBase64,                 // STRING Base64 (corrigido)
+                    encryptedForSelfBase64,
+                    encryptedForInstitutionBase64,
+                    publicKeyECDSAHex,
+                    publicHashToSubmit,
                 ]
             });
         } catch (err: any) {
@@ -147,6 +174,10 @@ export function AddStudentInformation(): JSX.Element {
             const msg = `Falha ao adicionar informações: ${err.message || String(err)}`;
             setStatus(null);
             setError(msg);
+            setIsGeneratingKeys(false);
+            setDownloadLink(null);
+            setGeneratedStudentPublicKey(null);
+            setGeneratedStudentPrivateKeyHex(null);
         }
     };
 
@@ -157,19 +188,21 @@ export function AddStudentInformation(): JSX.Element {
             setInstitutionAddress('');
             setName('');
             setDocument('');
-            setStudentPublicKey(null); 
-            setStudentPrivateKeyInput(''); 
+            setMasterPassword('');
+            setIsGeneratingKeys(false);
         }
     }, [isTxConfirmed]);
 
-    const isAddInfoDisabled = isTxPending || isLoadingInst || !isConnected || 
-                                !institutionAddressValid || !name || !document || !studentPublicKey; 
-    
-    const isInstitutionPublicKeyInvalid = institutionAddressValid && !isLoadingInst && !isInstError && 
-                                          (!institutionData || (institutionData as InstitutionContractData).publicKey?.length < 132 || (institutionData as InstitutionContractData).publicKey === '0x');
+    const isAddInfoDisabled = isTxPending || isLoadingInst || !isConnected ||
+                              !institutionAddressValid || !name || !document ||
+                              isGeneratingKeys ||
+                              !masterPassword || masterPassword.length < 12;
+
+    const isInstitutionPublicKeyInvalid = institutionAddressValid && !isLoadingInst && !isInstError &&
+                                            (!institutionData || (institutionData as InstitutionContractData).publicKey?.length < 132 || (institutionData as InstitutionContractData).publicKey === '0x');
 
     if (!hasMounted) {
-      return <></>; 
+        return <></>;
     }
 
     return (
@@ -177,41 +210,13 @@ export function AddStudentInformation(): JSX.Element {
             <h2>Adicionar Informação Pessoal do Estudante</h2>
             <p className="text-sm" style={{ marginBottom: '10px', color: 'gray' }}>
                 Suas informações são cifradas para você e para a instituição de auditoria. Sua chave pública de encriptação é registrada.
+                Você precisará de sua senha mestra e do arquivo de backup da chave privada para descriptografar seus dados.
             </p>
 
             {!isConnected ? (
                 <p style={{ color: 'orange' }}>⚠️ Conecte sua carteira para continuar.</p>
             ) : (
-                <form className="form space-y-3">
-                    {/* NOVO: Input para a chave privada do estudante */}
-                    <div style={{ marginBottom: '1rem' }}>
-                        <label htmlFor="studentPrivateKey" style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
-                            Sua Chave Privada (Estudante - Hex):
-                        </label>
-                        <input
-                            id="studentPrivateKey"
-                            type="text"
-                            value={studentPrivateKeyInput}
-                            onChange={(e) => setStudentPrivateKeyInput(e.target.value as Hex)}
-                            placeholder="Ex: 0xseu_estudante_private_key_aqui"
-                            style={{ width: '100%', padding: '0.5rem', border: '1px solid #ccc', borderRadius: '4px', boxSizing: 'border-box' }}
-                            disabled={!!studentPublicKey} 
-                        />
-                        <button
-                            type="button" 
-                            onClick={deriveStudentPublicKeyFromPrivate}
-                            disabled={!studentPrivateKeyInput || studentPrivateKeyInput.length !== 66 || !!studentPublicKey} 
-                            style={{ marginTop: '0.5rem', padding: '0.5rem 1rem', backgroundColor: '#6f42c1', color: 'white', borderRadius: '4px', opacity: (!studentPrivateKeyInput || studentPrivateKeyInput.length !== 66 || !!studentPublicKey) ? 0.6 : 1 }}
-                        >
-                            Derivar Minha Chave Pública (do Estudante)
-                        </button>
-                    </div>
-
-                    {/* Exibe a chave pública do estudante se estiver disponível */}
-                    {studentPublicKey && (
-                        <p style={{ color: 'green', fontWeight: 'bold' }}>✅ Chave Pública Derivada: <code style={{ fontSize: '0.8em', wordBreak: 'break-all' }}>{studentPublicKey}</code></p>
-                    )}
-
+                <form className="form space-y-3" onSubmit={handleGenerateKeysAndAddInfo}>
                     <input
                         type="text"
                         placeholder="Endereço da Instituição"
@@ -222,16 +227,17 @@ export function AddStudentInformation(): JSX.Element {
                             setStatus(null);
                         }}
                         className="w-full p-2 border rounded"
-                        disabled={!studentPublicKey}
+                        required
+                        disabled={isGeneratingKeys || isTxPending}
                     />
                     {isLoadingInst && <p className="text-sm text-blue-500">Verificando chave da instituição...</p>}
                     {isInstError && <p className="text-sm text-red-500">Erro ao buscar chave da instituição: {(instError as unknown as BaseError)?.shortMessage || instError?.message}</p>}
-                    
+
                     {!institutionAddressValid && institutionAddress !== '' && (
                         <p className="text-sm text-red-500">⚠️ Endereço da instituição inválido.</p>
                     )}
                     {isInstitutionPublicKeyInvalid &&
-                        <p className="text-sm text-red-500">⚠️ A instituição existe, mas não tem chave pública de encriptação registrada. Ou a chave é inválida.</p>
+                        <p className="text-sm text-red-500">⚠️ A instituição existe, mas não tem chave pública de encriptação ECDSA registrada no formato correto (0x04...).</p>
                     }
 
                     <input
@@ -244,7 +250,8 @@ export function AddStudentInformation(): JSX.Element {
                             setStatus(null);
                         }}
                         className="w-full p-2 border rounded"
-                        disabled={!studentPublicKey}
+                        required
+                        disabled={isGeneratingKeys || isTxPending}
                     />
                     <input
                         type="text"
@@ -256,23 +263,61 @@ export function AddStudentInformation(): JSX.Element {
                             setStatus(null);
                         }}
                         className="w-full p-2 border rounded"
-                        disabled={!studentPublicKey}
+                        required
+                        disabled={isGeneratingKeys || isTxPending}
                     />
-                    
-                    <button 
-                        type="button" 
-                        onClick={addStudentInformation}
+
+                    <div style={{ marginBottom: '1rem' }}>
+                        <label htmlFor="masterPassword" style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
+                            Sua Senha Mestra (para Criptografar sua Chave Privada):
+                        </label>
+                        <input
+                            id="masterPassword"
+                            type="password"
+                            value={masterPassword}
+                            onChange={(e) => setMasterPassword(e.target.value)}
+                            placeholder="Mínimo 12 caracteres"
+                            style={{ width: '100%', padding: '0.5rem', border: '1px solid #ccc', borderRadius: '4px', boxSizing: 'border-box' }}
+                            required
+                            disabled={isGeneratingKeys || isTxPending}
+                        />
+                    </div>
+
+                    <button
+                        type="submit"
                         disabled={isAddInfoDisabled || isInstitutionPublicKeyInvalid}
                         style={{ padding: '0.5rem 1rem', backgroundColor: '#28a745', color: 'white', borderRadius: '4px', opacity: (isAddInfoDisabled || isInstitutionPublicKeyInvalid) ? 0.6 : 1 }}
                     >
-                        {isTxPending ? "Aguardando Confirmação..." : "Adicionar Informação do Estudante"}
+                        {isGeneratingKeys ? "Gerando Chaves & Preparando Transação..." :
+                         isTxPending ? "Aguardando Confirmação da Blockchain..." :
+                         "Gerar Chaves e Adicionar Informação do Estudante"}
                     </button>
                 </form>
             )}
 
             {status && <p style={{ marginTop: '0.8rem', color: 'green', fontWeight: 'bold' }}>{status}</p>}
             {error && <p style={{ color: 'red', marginTop: '0.8rem' }}>Erro: {error}</p>}
+            {keyGenerationError && <p style={{ color: 'red', marginTop: '0.8rem' }}>Erro de Geração de Chave: {keyGenerationError}</p>}
             {writeError && <p style={{ color: 'red' }}>Erro na transação: {(writeError as unknown as BaseError).shortMessage || writeError.message}</p>}
+
+            {generatedStudentPublicKey && !keyGenerationError && (
+                <p style={{ color: 'blue', marginTop: '0.8rem' }}>
+                    ✅ Chave Pública ECDSA Gerada: <code style={{ fontSize: '0.8em', wordBreak: 'break-all' }}>{generatedStudentPublicKey}</code>
+                    <br />
+                    {!isTxConfirmed && "Aguardando sua confirmação na carteira para registrar esta chave e seus dados."}
+                </p>
+            )}
+
+            {downloadLink && isTxConfirmed && (
+                <div style={{ marginTop: '15px' }}>
+                    <p style={{ fontWeight: 'bold' }}>Importante: Baixe seu Arquivo de Chave Privada Criptografada!</p>
+                    <p>Este arquivo, junto com sua Senha Mestra, é essencial para descriptografar seus dados acadêmicos. Mantenha-o seguro e não o compartilhe. Faça um backup em local seguro.</p>
+                    <a href={downloadLink} download={`${address}_student_encrypted_private_key.json`}
+                       style={{ display: 'inline-block', padding: '0.5rem 1rem', backgroundColor: '#007bff', color: 'white', borderRadius: '4px', textDecoration: 'none', marginTop: '0.5rem' }}>
+                        Download Chave Privada Criptografada (JSON)
+                    </a>
+                </div>
+            )}
         </div>
     );
 }
