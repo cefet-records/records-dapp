@@ -1,6 +1,6 @@
 import Stack from '@mui/material/Stack'
 import React from 'react'
-import AddInstitution from '../institution/add-institution'
+import AddInstitution from './add-institution'
 
 const OwnerWrapper = () => {
   return (

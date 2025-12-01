@@ -103,15 +103,34 @@ const AcademicRecordStorageABI = [
         "internalType": "address",
         "name": "institutionAddress",
         "type": "address"
+      }
+    ],
+    "name": "InstitutionAdded",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "institutionAddress",
+        "type": "address"
       },
       {
         "indexed": false,
         "internalType": "string",
         "name": "name",
         "type": "string"
+      },
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "document",
+        "type": "string"
       }
     ],
-    "name": "InstitutionAdded",
+    "name": "InstitutionInformationAdded",
     "type": "event"
   },
   {
@@ -365,7 +384,15 @@ const AcademicRecordStorageABI = [
         "internalType": "address",
         "name": "_institutionAddress",
         "type": "address"
-      },
+      }
+    ],
+    "name": "addInstitution",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
       {
         "internalType": "string",
         "name": "_name",
@@ -377,7 +404,7 @@ const AcademicRecordStorageABI = [
         "type": "string"
       }
     ],
-    "name": "addInstitution",
+    "name": "addInstitutionInformation",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
