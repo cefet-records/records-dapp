@@ -5,7 +5,7 @@ import React, { useCallback, useState } from "react";
 import { useAccount, useWalletClient, usePublicClient, useReadContract, useWriteContract } from "wagmi";
 import { isAddress, Address, Hex } from "viem";
 import { wagmiContractConfig } from "../../abis/AcademicRecordStorageABI";
-import { useIsClient } from "../is-client";
+import { useIsClient } from "../../app/is-client";
 
 import { encryptECIES, decryptECIES } from '../../utils/cripto.utils';
 import * as CryptoJS from "crypto-js"; // Importar CryptoJS para o backup da chave do estudante

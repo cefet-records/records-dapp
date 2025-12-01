@@ -5,7 +5,7 @@ import React, { useState, useEffect, useCallback, ChangeEvent } from "react";
 import { useAccount, useReadContract } from "wagmi";
 import { isAddress, Address } from "viem";
 import { wagmiContractConfig } from "../../abis/AcademicRecordStorageABI";
-import { useIsClient } from "../is-client";
+import { useIsClient } from "../../app/is-client";
 import { decryptECIES } from '../../utils/cripto.utils';
 import { Hex } from "viem";
 import * as CryptoJS from "crypto-js"; // Importar CryptoJS

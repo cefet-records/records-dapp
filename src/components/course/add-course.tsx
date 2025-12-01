@@ -4,7 +4,7 @@
 import React, { useState, useEffect } from "react";
 import { useAccount, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
 import { wagmiContractConfig } from "../../abis/AcademicRecordStorageABI"; // Ajuste o caminho conforme necessário
-import { useIsClient } from "../is-client";
+import { useIsClient } from "../../app/is-client";
 
 
 

@@ -5,7 +5,7 @@ import React, { useState, useCallback } from "react";
 import { useAccount, useWalletClient, usePublicClient, useWriteContract } from "wagmi";
 import { isAddress, Address, Hex } from "viem";
 import { wagmiContractConfig } from "../../abis/AcademicRecordStorageABI";
-import { useIsClient } from "../is-client";
+import { useIsClient } from "../../app/is-client";
 
 import * as secp from "@noble/secp256k1";
 import { hexToBytes, bytesToHex, keccak256 } from "viem";
