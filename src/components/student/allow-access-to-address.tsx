@@ -1,36 +1,66 @@
 // components/AllowAccessToAddress.tsx
 "use client";
 
-import React, { useCallback, useState } from "react";
-import { useAccount, useWalletClient, usePublicClient, useReadContract, useWriteContract } from "wagmi";
+import React, { useCallback, useState, useEffect } from "react";
+import { useAccount, useWalletClient, usePublicClient, useReadContract, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
 import { isAddress, Address, Hex } from "viem";
 import { wagmiContractConfig } from "../../abis/AcademicRecordStorageABI";
 import { useIsClient } from "../../app/is-client";
 
-import { encryptECIES, decryptECIES } from '../../utils/cripto.utils';
-import * as CryptoJS from "crypto-js"; // Importar CryptoJS para o backup da chave do estudante
+import { encryptECIES, decryptECIES } from '../../utils/cripto.utils'; // Assumindo o caminho correto
+import * as CryptoJS from "crypto-js"; 
 
 // Constantes para KDF (devem ser as mesmas usadas na geração do backup)
 const KDF_ITERATIONS = 262144;
 const KDF_KEY_SIZE = 256 / 8; // 32 bytes para AES-256
 
 interface BackupFileContent {
-    encryptedPrivateKey: string; // Chave privada criptografada em Base64
-    salt: string;                // Salt usado no PBKDF2 em Hex
-    kdfIterations: number;       // Número de iterações do PBKDF2
-    iv: string;                  // Initialization Vector em Hex
+    encryptedPrivateKey: string; 
+    salt: string; 
+    kdfIterations: number; 
+    iv: string; 
 }
+
+// Prefixo da chave do Estudante no localStorage
+const PREFIX_STUDENT = "studentEncryptedPrivateKey_";
+
+// --- FUNÇÕES DE UTILIDADE PARA LOCALSTORAGE ---
+
+const getStudentLocalStorageKey = (address: Address | undefined): string | undefined => {
+    if (address && isAddress(address)) {
+        return `${PREFIX_STUDENT}${address.toLowerCase()}`;
+    }
+    return undefined;
+};
+
+const loadStudentBackupFromLocalStorage = (address: Address): BackupFileContent | null => {
+    const key = getStudentLocalStorageKey(address);
+    if (!key) return null;
+    const stored = localStorage.getItem(key);
+    if (stored) {
+        try {
+            return JSON.parse(stored) as BackupFileContent;
+        } catch (e) {
+            console.error("Erro ao parsear backup do estudante do localStorage:", e);
+            localStorage.removeItem(key); 
+            return null;
+        }
+    }
+    return null;
+};
+// --- FIM DAS FUNÇÕES DE UTILIDADE ---
+
 
 export function AllowAccessToAddress() {
     const { address: connectedAddress, isConnected } = useAccount();
-    const { data: walletClient } = useWalletClient();
     const publicClient = usePublicClient();
     const isClient = useIsClient();
 
     const [allowedAddress, setAllowedAddress] = useState<Address | "">("");
     const [internalStatusMessage, setInternalStatusMessage] = useState<string>("");
-    // Alteramos para aceitar um arquivo de backup e senha
-    const [studentBackupFile, setStudentBackupFile] = useState<File | null>(null);
+    
+    // Estado para o backup criptografado carregado do LS ou Upload
+    const [encryptedStudentBackupData, setEncryptedStudentBackupData] = useState<BackupFileContent | null>(null); 
     const [studentMasterPasswordDecrypt, setStudentMasterPasswordDecrypt] = useState<string>('');
     const [derivedStudentPrivateKey, setDerivedStudentPrivateKey] = useState<Hex | null>(null);
     const [isStudentPrivateKeyDerived, setIsStudentPrivateKeyDerived] = useState<boolean>(false);
@@ -38,59 +68,88 @@ export function AllowAccessToAddress() {
     const { writeContractAsync, isPending: isWritePending } = useWriteContract();
 
     const allowedAddressValid = isAddress(allowedAddress);
+    const connectedAddressValid = isConnected && connectedAddress;
 
-    // Hook para ler a chave pública do recipiente (viewer)
-    // Args: recipient (o allowedAddress), sender (o estudante conectado)
-    const { data: recipientKey, isLoading: isRecipientKeyLoading, refetch: refetchRecipientKey } = useReadContract({
+    // --- HOOKs useReadContract ---
+    const { data: recipientKey, refetch: refetchRecipientKey } = useReadContract({
         ...wagmiContractConfig,
         functionName: 'retrieveRecipientEncrpytKey',
         args: allowedAddressValid && connectedAddress ? [allowedAddress, connectedAddress] : undefined,
-        query: {
-            enabled: false,
-            staleTime: 0,
-        },
+        query: { enabled: false, staleTime: 0 },
     });
 
-    // Hook para ler os dados do estudante (para obter selfEncryptedInformation)
-    // Args: studentAddress (o estudante conectado)
-    const { data: studentData, isLoading: isStudentDataLoading, refetch: refetchStudentData } = useReadContract({
+    // O retorno deste hook é a struct Student, com campos nomeados (studentAddress, selfEncryptedInformation, etc.)
+    const { data: studentData, refetch: refetchStudentData } = useReadContract({
         ...wagmiContractConfig,
         functionName: 'getStudent',
-        args: connectedAddress ? [connectedAddress] : undefined, // O estudante atual é o conectado
-        query: {
-            enabled: false,
-            staleTime: 0,
-        },
+        args: connectedAddress ? [connectedAddress] : undefined, 
+        query: { enabled: false, staleTime: 0 },
     });
+    
+    // --- EFEITO: Carregar Backup do Estudante Conectado ---
+    useEffect(() => {
+        setEncryptedStudentBackupData(null);
+        setDerivedStudentPrivateKey(null);
+        setIsStudentPrivateKeyDerived(false);
+        setInternalStatusMessage("");
 
-    // Função para derivar a chave privada do estudante a partir do backup
-    const deriveStudentPrivateKey = useCallback(async (): Promise<Hex | null> => {
-        if (!studentBackupFile || !studentMasterPasswordDecrypt) {
-            setInternalStatusMessage("Por favor, faça upload do arquivo de backup do estudante e insira a senha mestra.");
-            setIsStudentPrivateKeyDerived(false);
-            return null;
+        if (connectedAddressValid) {
+            const loadedData = loadStudentBackupFromLocalStorage(connectedAddress);
+            if (loadedData) {
+                setEncryptedStudentBackupData(loadedData);
+                setInternalStatusMessage("Backup criptografado da sua chave privada carregado do navegador. Insira a senha mestra.");
+            } else {
+                setInternalStatusMessage("Backup da sua chave privada NÃO ENCONTRADO no navegador. Por favor, faça o upload do arquivo de backup (.json).");
+            }
         }
-        if (studentMasterPasswordDecrypt.length < 12) {
+    }, [connectedAddressValid, connectedAddress]);
+
+
+    // --- Função: Carregar Backup do Upload (Se o LS falhar) ---
+    const handleStudentFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        setEncryptedStudentBackupData(null);
+        setDerivedStudentPrivateKey(null);
+        setIsStudentPrivateKeyDerived(false);
+        setInternalStatusMessage("");
+
+        const file = event.target.files?.[0];
+        if (file) {
+             try {
+                const fileContent = await file.text();
+                const backupData: BackupFileContent = JSON.parse(fileContent);
+                if (!backupData.encryptedPrivateKey || !backupData.salt || !backupData.iv) {
+                     throw new Error("Arquivo JSON de backup inválido.");
+                }
+                setEncryptedStudentBackupData(backupData);
+                setInternalStatusMessage("Arquivo de backup carregado. Por favor, insira a senha mestra.");
+            } catch (err: any) {
+                console.error("Erro ao ler/parsear arquivo:", err);
+                setInternalStatusMessage(`Erro ao carregar arquivo: ${err.message || String(err)}`);
+            }
+        }
+    };
+
+
+    // --- Função para derivar a chave privada do estudante a partir do backup (JSON) ---
+    const deriveStudentPrivateKey = useCallback(async (backupData: BackupFileContent): Promise<Hex | null> => {
+        if (!studentMasterPasswordDecrypt || studentMasterPasswordDecrypt.length < 12) {
             setInternalStatusMessage("A senha mestra do estudante deve ter pelo menos 12 caracteres.");
             setIsStudentPrivateKeyDerived(false);
             return null;
         }
 
-        setInternalStatusMessage("Lendo arquivo de backup do estudante e derivando chave privada...");
+        setInternalStatusMessage("Derivando chave privada do estudante...");
         setIsStudentPrivateKeyDerived(false);
         setDerivedStudentPrivateKey(null);
 
         try {
-            const fileContent = await studentBackupFile.text();
-            const backupData: BackupFileContent = JSON.parse(fileContent);
-
             const { encryptedPrivateKey, salt, kdfIterations, iv } = backupData;
 
             if (kdfIterations !== KDF_ITERATIONS) {
-                throw new Error(`As iterações do KDF no arquivo (${kdfIterations}) não correspondem ao esperado (${KDF_ITERATIONS}).`);
+                throw new Error(`KDF do arquivo (${kdfIterations}) não corresponde ao esperado (${KDF_ITERATIONS}).`);
             }
             if (!iv || typeof iv !== 'string' || iv.length !== 32) {
-                throw new Error("IV (Initialization Vector) não encontrado ou inválido no arquivo de backup.");
+                throw new Error("IV (Initialization Vector) inválido no backup.");
             }
 
             const saltKDF = CryptoJS.enc.Hex.parse(salt);
@@ -110,12 +169,12 @@ export function AllowAccessToAddress() {
             const decryptedPrivateKeyHex = decryptedWords.toString(CryptoJS.enc.Utf8);
 
             if (!decryptedPrivateKeyHex || !decryptedPrivateKeyHex.startsWith('0x') || decryptedPrivateKeyHex.length !== 66) {
-                throw new Error("Falha ao descriptografar a chave privada do estudante ou formato inválido.");
+                throw new Error("Falha ao descriptografar a chave privada do estudante (senha incorreta ou formato inválido).");
             }
 
             setDerivedStudentPrivateKey(decryptedPrivateKeyHex as Hex);
             setIsStudentPrivateKeyDerived(true);
-            setInternalStatusMessage("Chave privada do estudante derivada com sucesso do arquivo e senha.");
+            setInternalStatusMessage("Chave privada do estudante derivada com sucesso!");
             return decryptedPrivateKeyHex as Hex;
 
         } catch (err: any) {
@@ -125,51 +184,34 @@ export function AllowAccessToAddress() {
             setIsStudentPrivateKeyDerived(false);
             return null;
         }
-    }, [studentBackupFile, studentMasterPasswordDecrypt]);
-
-
-    const handleStudentFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
-        setStudentBackupFile(null);
-        setDerivedStudentPrivateKey(null);
-        setIsStudentPrivateKeyDerived(false);
-        setInternalStatusMessage("");
-        const file = event.target.files?.[0];
-        if (file) {
-            setStudentBackupFile(file);
-        }
-    };
+    }, [studentMasterPasswordDecrypt]);
 
 
     const allowAccessToAddress = async () => {
         setInternalStatusMessage("");
 
-        if (!isConnected || !connectedAddress) {
-            setInternalStatusMessage("Por favor, conecte sua carteira.");
-            return;
-        }
-        if (!allowedAddressValid) {
-            setInternalStatusMessage("Por favor, insira um endereço de destinatário válido.");
-            return;
+        if (!connectedAddressValid || !allowedAddressValid || !encryptedStudentBackupData) {
+             setInternalStatusMessage("Por favor, conecte-se, insira o endereço do visitante e carregue seu backup de chave privada.");
+             return;
         }
 
+        // 1. Derivar a chave privada, se necessário
         let currentStudentPrivateKey = derivedStudentPrivateKey;
         if (!isStudentPrivateKeyDerived || !currentStudentPrivateKey) {
             setInternalStatusMessage("Iniciando derivação da sua chave privada...");
-            currentStudentPrivateKey = await deriveStudentPrivateKey();
+            currentStudentPrivateKey = await deriveStudentPrivateKey(encryptedStudentBackupData);
             if (!currentStudentPrivateKey) {
-                // Mensagem de erro já é definida dentro de deriveStudentPrivateKey
-                return;
+                return; // O erro já é definido internamente
             }
         }
-
-
+        
         if (!isClient) {
             setInternalStatusMessage("Aguarde, o ambiente do cliente ainda não está pronto.");
             return;
         }
 
         try {
-            // 1. Obter a chave pública do recipiente (viewer)
+            // 2. Obter a chave pública do recipiente (viewer)
             setInternalStatusMessage("Buscando chave pública do destinatário (visitante)...");
             const recipientKeyResponse = await refetchRecipientKey();
             const retrievedRecipientKey = recipientKeyResponse.data as Hex | undefined;
@@ -179,10 +221,12 @@ export function AllowAccessToAddress() {
                 return;
             }
 
-            // 2. Obter a `selfEncryptedInformation` do estudante conectado
+            // 3. Obter a `selfEncryptedInformation` do estudante conectado
             setInternalStatusMessage("Buscando suas informações criptografadas (do estudante)...");
             const studentDataResponse = await refetchStudentData();
-            const studentSelfEncryptedInfo = studentDataResponse.data?.selfEncryptedInformation;
+            
+            // CORREÇÃO APLICADA AQUI: Acessa a propriedade nomeada, não o índice
+            const studentSelfEncryptedInfo = studentDataResponse.data?.selfEncryptedInformation; 
 
             if (!studentSelfEncryptedInfo || studentSelfEncryptedInfo === '0x') {
                 setInternalStatusMessage("Não foi possível obter suas informações criptografadas do contrato. Verifique se você já registrou seus dados.");
@@ -196,16 +240,15 @@ export function AllowAccessToAddress() {
                 studentInformation = await decryptECIES(studentSelfEncryptedInfo, currentStudentPrivateKey);
             } catch (decryptError) {
                 console.error("Erro ao descriptografar selfEncryptedInformation:", decryptError);
-                setInternalStatusMessage(`Falha na descriptografia de seus dados: ${decryptError instanceof Error ? decryptError.message : String(decryptError)}. Verifique sua chave privada.`);
+                setInternalStatusMessage(`Falha na descriptografia de seus dados: ${decryptError instanceof Error ? decryptError.message : String(decryptError)}. Sua chave privada está incorreta?`);
                 return;
             }
 
-            // 3. Re-criptografar a informação bruta para o `recipientKey` (chave pública do visitante)
+            // 4. Re-criptografar a informação bruta para o `recipientKey` (chave pública do visitante)
             setInternalStatusMessage("Criptografando informações para o destinatário (visitante) com sua chave pública...");
             const encryptedValue = await encryptECIES(studentInformation, retrievedRecipientKey);
 
-            // 4. Enviar a transação para o contrato
-            // function addEncryptedInfoWithRecipientKey(Address _recipient, Address _student, bytes calldata _encryptedInfo)
+            // 5. Enviar a transação para o contrato
             setInternalStatusMessage("Enviando transação para conceder acesso...");
             const txHash = await writeContractAsync({
                 ...wagmiContractConfig,
@@ -221,12 +264,6 @@ export function AllowAccessToAddress() {
             if (receipt?.status === 'success') {
                 setInternalStatusMessage("Acesso concedido com sucesso ao endereço do visitante!");
                 setAllowedAddress("");
-                // Não limpar a chave privada derivada para evitar que o usuário precise fazer upload novamente imediatamente,
-                // mas é uma decisão de UX. Para máxima segurança, limpar após o uso.
-                // setStudentBackupFile(null);
-                // setStudentMasterPasswordDecrypt('');
-                // setDerivedStudentPrivateKey(null);
-                // setIsStudentPrivateKeyDerived(false);
             } else {
                 setInternalStatusMessage("Falha na transação. Status: " + receipt?.status);
             }
@@ -245,19 +282,19 @@ export function AllowAccessToAddress() {
         }
     };
 
-    const isDisabled = !isClient || !isConnected || !allowedAddressValid || isWritePending ||
-                       !studentBackupFile || studentMasterPasswordDecrypt.length < 12;
+    const isDisabled = !isClient || !connectedAddressValid || !allowedAddressValid || isWritePending ||
+                        !encryptedStudentBackupData || studentMasterPasswordDecrypt.length < 12;
+
+    const showUploadField = !encryptedStudentBackupData;
 
     return (
         <div className="allow-access-container" style={{ marginTop: '1.5rem', border: '1px solid #007bff', padding: '1rem', borderRadius: '4px' }}>
             <h2>Conceder Acesso à Informação Pessoal do Estudante</h2>
-            <p className="text-sm" style={{ marginBottom: '10px', color: 'gray' }}>
-                Como estudante, você pode conceder acesso ao seu histórico para um visitante.
-                Insira o endereço do visitante, faça upload do seu próprio arquivo de backup de chave privada e sua senha mestra.
-                O visitante deve ter solicitado acesso previamente para que sua chave pública esteja disponível.
-            </p>
+            {/* <p className="text-sm" style={{ marginBottom: '10px', color: 'gray' }}>
+                Como estudante, você usa **sua própria chave privada** para descriptografar seus dados e re-criptografá-los para o visitante. O backup da sua chave é carregado automaticamente.
+            </p> */}
 
-            {!isConnected || !connectedAddress ? (
+            {!connectedAddressValid ? (
                 <p style={{ color: 'orange', marginBottom: '1rem' }}>⚠️ Conecte sua carteira (do estudante) para conceder acesso.</p>
             ) : (
                 <form className="form space-y-3" onSubmit={(e) => e.preventDefault()}>
@@ -276,28 +313,30 @@ export function AllowAccessToAddress() {
                     {!allowedAddressValid && allowedAddress !== '' && (
                         <p className="text-sm text-red-500">⚠️ Endereço do visitante inválido.</p>
                     )}
-
-                    {/* Upload do Arquivo de Chave Privada do Estudante */}
-                    <div style={{ marginTop: '1rem' }}>
-                        <label htmlFor="studentBackupFile" style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
-                            Seu Arquivo de Chave Privada Criptografada (.json) (Estudante):
-                        </label>
-                        <input
-                            id="studentBackupFile"
-                            type="file"
-                            accept=".json"
-                            onChange={handleStudentFileChange}
-                            className="w-full p-2 border rounded"
-                            disabled={isWritePending}
-                            style={{ backgroundColor: '#fffbe6' }}
-                        />
-                        {studentBackupFile && <p className="text-sm text-gray-600 mt-1">Arquivo selecionado: {studentBackupFile.name}</p>}
-                    </div>
-
+                    
+                    {/* Upload do Arquivo de Chave Privada do Estudante (Condicional) */}
+                    {showUploadField && (
+                        <div style={{ marginTop: '1rem' }}>
+                            <label htmlFor="studentBackupFile" style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
+                                Seu Arquivo de Chave Privada Criptografada (.json) (Estudante):
+                            </label>
+                            <input
+                                id="studentBackupFile"
+                                type="file"
+                                accept=".json"
+                                onChange={handleStudentFileChange}
+                                className="w-full p-2 border rounded"
+                                disabled={isWritePending}
+                                style={{ backgroundColor: '#fffbe6' }}
+                            />
+                            <p className="text-sm text-red-500 mt-1">⚠️ Backup da sua chave privada não foi encontrado no navegador. Faça o upload do arquivo.</p>
+                        </div>
+                    )}
+                    
                     {/* Senha Mestra do Estudante */}
                     <div style={{ marginBottom: '1rem' }}>
                         <label htmlFor="studentMasterPasswordDecrypt" style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
-                            Sua Senha Mestra (do Estudante, para descriptografar seu backup):
+                            Senha:
                         </label>
                         <input
                             id="studentMasterPasswordDecrypt"
@@ -307,16 +346,21 @@ export function AllowAccessToAddress() {
                             placeholder="Mínimo 12 caracteres"
                             style={{ width: '100%', padding: '0.5rem', border: '1px solid #ccc', borderRadius: '4px', boxSizing: 'border-box', backgroundColor: '#fffbe6' }}
                             required
-                            disabled={isWritePending}
+                            disabled={isWritePending || !encryptedStudentBackupData}
                             autoComplete="off"
                         />
+                        {/* {encryptedStudentBackupData && !showUploadField && (
+                            <p className="text-sm text-green-500 mt-1">
+                                ✅ Backup da sua chave carregado do navegador. Digite a senha para descriptografar.
+                            </p>
+                        )} */}
                         {studentMasterPasswordDecrypt.length > 0 && studentMasterPasswordDecrypt.length < 12 && (
                             <p className="text-sm text-red-500 mt-1">⚠️ Sua senha mestra deve ter pelo menos 12 caracteres.</p>
                         )}
                     </div>
 
                     {isStudentPrivateKeyDerived && !internalStatusMessage.includes('Falha') && !internalStatusMessage.includes('Erro') && !isWritePending && (
-                        <p style={{ color: 'green', marginTop: '0.8rem' }}>✅ Sua chave privada derivada com sucesso.</p>
+                        <p style={{ color: 'green', marginTop: '0.8rem' }}>✅ Sua chave privada derivada com sucesso. Pronto para conceder acesso.</p>
                     )}
 
                     {/* Botão para Conceder Acesso */}
@@ -331,12 +375,12 @@ export function AllowAccessToAddress() {
                 </form>
             )}
 
-            {internalStatusMessage && (
+            {/* {internalStatusMessage && (
                 <p className={`status-message ${internalStatusMessage.includes('Falha') || internalStatusMessage.includes('Erro') || internalStatusMessage.includes('rejeitada') ? 'text-red-500' : 'text-green-700'}`}
                     style={{ marginTop: '0.8rem', fontWeight: 'bold' }}>
                     {internalStatusMessage}
                 </p>
-            )}
+            )} */}
         </div>
     );
 }

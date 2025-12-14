@@ -7,16 +7,25 @@ import { AddGrade } from '../grade/add-grade'
 import { GetGrade } from '../grade/get-grade'
 import AddInstitutionInfo from './add-institution-information'
 import { GetStudent } from '../student/get-student'
+import { AddBatchGrade } from '@/app/institution/add-batch-record'
+import { ViewInstitutionCourses } from '@/app/institution/view-institution-courses'
+import { AddBatchStudents } from '../student/add-batch-students'
+import { AddBatchCourses } from '../course/add-batch-course'
+import { AddGlobalBatchDisciplines } from '../discipline/add-batch-discipline'
 
 const IntitutionWrapper = () => {
   return (
     <Stack>
       <AddInstitutionInfo />
-      <AddStudent />
+      <AddBatchStudents />
+      {/* <AddStudent /> */}
       <GetStudent />
-      <AddCourse />
-      <AddDiscipline />
-      <AddGrade />
+      <AddBatchCourses />
+      {/* <AddCourse /> */}
+      <AddGlobalBatchDisciplines />
+      {/* <AddDiscipline /> */}
+      <ViewInstitutionCourses />
+      <AddBatchGrade />
       <GetGrade />
     </Stack>
   )

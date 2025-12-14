@@ -8,10 +8,10 @@ import { GetGrade } from '../grade/get-grade';
 const StudentWrapper = (): React.JSX.Element => {
   return (
     <Stack>
-      <AllowAccessToAddress />
       <AddStudentInformation />
       <GetStudent />
       <GetGrade />
+      <AllowAccessToAddress />
     </Stack>
   );
 };

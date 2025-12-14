@@ -50,11 +50,7 @@ export default function AddInstitution(): JSX.Element {
 
     return (
         <div className="add-institution-container" style={{ marginTop: '1.5rem', border: '1px solid #007bff', padding: '1rem', borderRadius: '4px' }}>
-            <h2>Registrar Endereço da Instituição (Owner Only)</h2>
-            <p className="text-sm" style={{ marginBottom: '10px', color: 'gray' }}>
-                Como Owner, você pode registrar o endereço de uma nova instituição. A instituição precisará
-                atualizar seu perfil e gerar suas próprias chaves em um componente separado.
-            </p>
+            <h2>Registrar Endereço da Instituição</h2>
             <form onSubmit={handleSubmit} className="form space-y-3">
                 <input
                     type="text"
