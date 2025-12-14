@@ -7,7 +7,6 @@ import { WagmiProvider } from "wagmi";
 import { config } from "@/config/wagmi.config";
 import { DynamicWagmiConnector } from "@dynamic-labs/wagmi-connector";
 import { evmNetworks } from "@/config/chains.config";
-import HeaderPage from "@/components/header/header-page";
 
 const queryClient = new QueryClient();
 
@@ -17,8 +16,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <body>
+    <html lang="en" className="h-full">
+      <body className="min-h-screen">
         <DynamicContextProvider
           settings={{
             environmentId: process.env.NEXT_PUBLIC_DYNAMIC_KEY!,

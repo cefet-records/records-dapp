@@ -1,142 +1,216 @@
-"use client"; 
+// components/AddBatchGrade.tsx
+"use client";
 
-import { JSX, useEffect, useState } from "react";
-import { type BaseError, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
-import { Address, numberToHex, Log, parseEventLogs, toBytes, Hex, keccak256 } from "viem";
+import React, { useState, useEffect, useCallback } from "react";
+import { useAccount, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
+import { isAddress, Address } from "viem";
 import { wagmiContractConfig } from "@/abis/AcademicRecordStorageABI";
-import { useDynamicContext } from "@dynamic-labs/sdk-react-core";
-import { encryptAESGCM, encryptECIES } from "@/utils/cripto.utils";
-import { INSTITUTION_PUBLIC_KEY, MOCK_BATCH_DATA } from "@/utils/utils";
 
-interface CryptographicResult {
-    recordId: Hex;
-    encryptedData: Hex;
-    encryptedKeyIssuer: Hex; 
-    encryptedKeyStudent: Hex;
-    issuerSignature: Hex; 
-    studentAddress: Address;
+// Define a estrutura do payload esperado pela função addBatchGrades no contrato
+interface BatchGradePayload {
+  studentAddress: Address; // Garante que o tipo Address é usado
+  courseCode: string;
+  disciplineCode: string;
+  semester: number; // uint8
+  year: number;     // uint16
+  grade: number;    // uint8
+  attendance: number; // uint8
+  status: boolean;
 }
 
-export default function RegisterBatchRecords(): JSX.Element {
-    const { primaryWallet } = useDynamicContext();
-    const { data: hash, error, isPending, writeContract } = useWriteContract();
-    const [isLoadingCrypto, setIsLoadingCrypto] = useState(false);
-    const [payloads, setPayloads] = useState<CryptographicResult[] | null>(null);
-    
-    const processBatch = async () => {
-        if (!primaryWallet || !primaryWallet.address || isLoadingCrypto) return;
-        setIsLoadingCrypto(true);
-        setPayloads(null);
-        try {
-            const institutionPublicKey = INSTITUTION_PUBLIC_KEY; 
-            const walletClient = await (primaryWallet.connector as any).getWalletClient();
-            if (!walletClient) throw new Error("Não foi possível obter o WalletClient da carteira embarcada.");
-            const signMessageFn = async (message: string | Uint8Array): Promise<Hex> => {
-                if (typeof message === "string") {
-                    return walletClient.signMessage({
-                        account: primaryWallet.address,
-                        message: message,
-                    });
-                } else {
-                    return walletClient.signMessage({
-                        account: primaryWallet.address,
-                        message: { raw: message },
-                    });
-                }
-            };
-            const results: CryptographicResult[] = [];
-            const timestamp = Date.now();
+// URL do novo endpoint API para buscar as notas
+const BATCH_API_URL = '/api/grades-batch';
 
-            for (const record of MOCK_BATCH_DATA) {
-                const plaintextJsonString = JSON.stringify(record.plaintextData);
-                const plaintextHash = keccak256(toBytes(plaintextJsonString)); 
-                const aesKey = crypto.getRandomValues(new Uint8Array(32));
-                const encryptedData = await encryptAESGCM(plaintextJsonString, aesKey);
-                const issuerSignature = await signMessageFn(plaintextHash);
-                const encryptedKeyIssuer = await encryptECIES(aesKey, institutionPublicKey);
-                const encryptedKeyStudent = await encryptECIES(aesKey, record.studentPublicKey);
-                const recordId = keccak256(toBytes(plaintextHash + numberToHex(timestamp, { size: 32 }))); 
 
-                results.push({
-                    recordId,
-                    encryptedData,
-                    encryptedKeyIssuer,
-                    encryptedKeyStudent,
-                    issuerSignature,
-                    studentAddress: record.studentAddress,
-                });
-            }
-            console.log("payload", results);
-            setPayloads(results);
-        } catch (err: any) {
-            console.error("ERRO CRIPTOGRÁFICO OU DE ASSINATURA:", err);
-            setPayloads(null);
-            alert(`Erro ao processar lote: ${err.message || err.toString()}`);
-        } finally {
-            setIsLoadingCrypto(false);
-        }
-    };
+export function AddBatchGrade() {
+  const { address: connectedAddress, isConnected } = useAccount();
+  const [internalStatusMessage, setInternalStatusMessage] = useState<string>("");
+  const [isFetchingDB, setIsFetchingDB] = useState<boolean>(false); // NOVO ESTADO para DB
+  const [gradesBatch, setGradesBatch] = useState<BatchGradePayload[]>([]); // Armazena dados do DB
 
-    const handleRegisterBatch = async (): Promise<void> => {
-        if (!payloads || isPending) return;
-        const cleanedSignatures = payloads.map(p => 
-            p.issuerSignature.startsWith("0x") ? p.issuerSignature.slice(2) : p.issuerSignature
-        );
-        writeContract({
-            ...wagmiContractConfig,
-            functionName: "registerBatchRecords",
-            args: [
-                payloads.map(p => p.recordId),
-                payloads.map(p => p.studentAddress),
-                payloads.map(p => p.encryptedData),
-                payloads.map(p => p.encryptedKeyIssuer),
-                payloads.map(p => p.encryptedKeyStudent),
-                cleanedSignatures.map(sig => `0x${sig}` as Hex),
-            ]
-        });
-    };
+  const institutionAddress = connectedAddress || ("0x" as Address);
 
-    const { 
-        data: receipt, 
-        isLoading: isConfirming, 
-        isSuccess: isConfirmed 
-    } = useWaitForTransactionReceipt({ hash });
-    
-    const [recordEvents, setRecordEvents] = useState<Log[]>([]);
-    
-    useEffect(() => {
-        if (receipt) {
-            const events = parseEventLogs({
-                abi: wagmiContractConfig.abi,
-                logs: receipt.logs,
-                eventName: "RecordRegistered"
-            });
-            setRecordEvents(events);
-        }
-    }, [receipt]); 
-    
-    const buttonText = isPending 
-        ? "Enviando Transação..." 
-        : (isLoadingCrypto 
-            ? `Processando ${MOCK_BATCH_DATA.length} Registros...` 
-            : (isConfirming 
-                ? "Confirmando Transação..." 
-                : (payloads ? "Assinar e Enviar Lote para Blockchain" : "Iniciar Criptografia e Preparar Lote")
-            )
-        );
-    
-    const isDisabled = isPending || isConfirming || isLoadingCrypto || !primaryWallet?.address;
+  const { data: hash, error: writeError, isPending, writeContract } = useWriteContract();
+  const { isLoading: isConfirming, isSuccess: isConfirmed, error: confirmError } = useWaitForTransactionReceipt({
+    hash,
+    query: {
+      enabled: !!hash,
+    },
+  });
 
-    return (
-        <div>
-            <h3>Registrar Lote de Registros Acadêmicos</h3>
-            <p>O processo de **segurança** (AES e ECIES) é realizado no cliente antes do envio.</p>
-            <button disabled={isDisabled} onClick={payloads ? handleRegisterBatch : processBatch} type="button">{buttonText}</button>
-            {isLoadingCrypto && <div style={{color: "orange", marginTop: "1rem"}}><p>Processando {MOCK_BATCH_DATA.length} registros...</p></div>}
-            {hash && <div style={{marginTop: "1rem"}}>Transaction Hash: {hash}</div>}
-            {error && <div style={{color: "red", marginTop: "0.5rem"}}>Erro: {(error as BaseError)?.shortMessage || error?.message || "Erro desconhecido"}</div>}
-            {isConfirmed && <div style={{color: "green", marginTop: "0.5rem"}}>Lote registrado com sucesso!</div>}
-            {isConfirmed && recordEvents.length > 0 && (<div style={{marginTop: "1rem"}}><h4>Eventos "RecordRegistered" Emitidos:</h4></div>)}
-        </div>
-    );
+  // --- FUNÇÃO PARA BUSCAR DADOS DO POSTGRES ---
+  const fetchGradesFromDB = useCallback(async (instAddress: Address): Promise<BatchGradePayload[]> => {
+    setInternalStatusMessage("Buscando notas no banco de dados...");
+    setIsFetchingDB(true);
+
+    try {
+      // Passa o endereço da instituição como parâmetro de consulta para filtrar as notas
+      const response = await fetch(`${BATCH_API_URL}?institutionAddress=${instAddress}`);
+
+      if (!response.ok) {
+        const errorBody = await response.json();
+        throw new Error(errorBody.message || `Erro ao buscar notas (Status: ${response.status})`);
+      }
+
+      const data: BatchGradePayload[] = await response.json();
+      return data;
+
+    } catch (error) {
+      console.error("Erro ao comunicar com API de Batch (Notas):", error);
+      const msg = `Falha na comunicação DB: ${error instanceof Error ? error.message : String(error)}`;
+      setInternalStatusMessage(msg);
+      throw error;
+    } finally {
+      setIsFetchingDB(false);
+    }
+  }, []);
+
+
+  // Função para montar e enviar a transação
+  const sendBatchTransaction = useCallback((batchData: BatchGradePayload[]) => {
+    if (!isConnected || !institutionAddress || !isAddress(institutionAddress)) {
+      setInternalStatusMessage("Erro: Carteira de instituição não conectada ou inválida.");
+      return;
+    }
+    if (batchData.length === 0) {
+      setInternalStatusMessage("Erro: O lote de notas está vazio.");
+      return;
+    }
+
+    // Validação básica dos dados antes de enviar
+    for (const item of batchData) {
+      if (!isAddress(item.studentAddress)) {
+        setInternalStatusMessage(`Erro: Endereço de estudante inválido no lote: ${item.studentAddress}`);
+        return;
+      }
+      // Não é necessário validar > 255 se você estiver seguro dos tipos Solidity, 
+      // mas é bom garantir que são números inteiros positivos se forem mapear para uints.
+      if (item.grade < 0 || item.attendance < 0) {
+        setInternalStatusMessage("Erro: Notas e frequências devem ser positivas.");
+        return;
+      }
+    }
+
+    // Casting explícito para o tipo array de structs esperado pelo wagmi
+    const typedBatchData = batchData as unknown as readonly {
+      studentAddress: Address;
+      courseCode: string;
+      disciplineCode: string;
+      semester: number;
+      year: number;
+      grade: number;
+      attendance: number;
+      status: boolean;
+    }[];
+
+
+    writeContract({
+      ...wagmiContractConfig,
+      functionName: "addBatchGrades",
+      args: [
+        institutionAddress, // address _institutionAddress
+        typedBatchData,     // BatchGradePayload[] _gradesInfo
+      ],
+    });
+  }, [isConnected, institutionAddress, writeContract]);
+
+
+  // Handler para buscar os dados do DB e iniciar a transação
+  const handleBatchIngestion = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setInternalStatusMessage("");
+    setGradesBatch([]);
+
+    if (!isConnected || !institutionAddress || !isAddress(institutionAddress)) {
+      setInternalStatusMessage("Erro: Conecte a carteira da instituição para iniciar a ingestão.");
+      return;
+    }
+
+    try {
+      // 1. BUSCAR DADOS DO BANCO DE DADOS
+      const batchData = await fetchGradesFromDB(institutionAddress);
+      setGradesBatch(batchData);
+
+      if (batchData.length > 0) {
+        setInternalStatusMessage(`✅ ${batchData.length} notas carregadas do DB. Enviando transação em lote...`);
+        // 2. Enviar a transação
+        sendBatchTransaction(batchData);
+      } else {
+        setInternalStatusMessage("Nenhuma nota encontrada no DB para esta instituição.");
+      }
+
+    } catch (error) {
+      // O erro já foi setado dentro de fetchGradesFromDB
+    }
+  };
+
+
+  // Efeito para feedback da transação
+  useEffect(() => {
+    if (isPending) {
+      setInternalStatusMessage("Aguardando confirmação na carteira...");
+    } else if (writeError) {
+      setInternalStatusMessage(`Erro na transação: ${(writeError as any).shortMessage || writeError.message}`);
+      console.error("Erro ao enviar transação:", writeError);
+    } else if (isConfirming) {
+      setInternalStatusMessage("Transação enviada, aguardando confirmação...");
+    } else if (isConfirmed) {
+      setInternalStatusMessage("✅ Lote de notas adicionado com sucesso na blockchain!");
+    } else if (confirmError) {
+      setInternalStatusMessage(`Erro ao confirmar transação: ${(confirmError as any).shortMessage || confirmError.message}`);
+      console.error("Erro ao confirmar transação:", confirmError);
+    }
+  }, [isPending, writeError, isConfirming, isConfirmed, confirmError]);
+
+  // O status isProcessing agora inclui o carregamento do DB
+  const isProcessing = isPending || isConfirming || isFetchingDB;
+  const isButtonDisabled = isProcessing || !isConnected || !isAddress(institutionAddress);
+
+
+  return (
+    <div className="add-batch-grade-container p-4 bg-white rounded-lg shadow-md border-l-4 border-red-500">
+      <h2>Ingestão em Lote de Notas (PostgreSQL)</h2>
+      <p className="text-sm" style={{ marginBottom: '10px', color: 'gray' }}>
+        Busca notas no banco de dados, filtra por instituição, e as envia em lote para a blockchain.
+      </p>
+
+      {(!isConnected || !isAddress(institutionAddress)) && (
+        <p style={{ color: 'red', marginBottom: '1rem' }}>⚠️ Conecte a carteira da Instituição para realizar a ingestão.</p>
+      )}
+
+      {isAddress(institutionAddress) && (
+        <p className="text-sm text-blue-700">Instituição Conectada: **{institutionAddress}**</p>
+      )}
+
+      <form className="form space-y-3" onSubmit={handleBatchIngestion}>
+        <button
+          type="submit"
+          disabled={isButtonDisabled}
+          className="w-full p-2 text-white font-semibold rounded transition duration-150"
+          style={{ backgroundColor: isButtonDisabled ? '#F44336' : '#C62828', opacity: isButtonDisabled ? 0.6 : 1, marginTop: '10px' }}
+        >
+          {isFetchingDB ? "Buscando Notas do DB..." : isProcessing ? "Processando Lote..." : "Enviar Lote de Notas"}
+        </button>
+      </form>
+
+      {internalStatusMessage && (
+        <p className={`status-message ${internalStatusMessage.includes('Erro') || internalStatusMessage.includes('Falha') ? 'text-red-500' : 'text-green-700'}`}
+          style={{ marginTop: '0.8rem', fontWeight: 'bold' }}>
+          {internalStatusMessage}
+        </p>
+      )}
+
+      {gradesBatch.length > 0 && !isProcessing && (
+        <p className="text-xs text-gray-600 mt-2">
+          Lote processado: {gradesBatch.length} notas carregadas.
+        </p>
+      )}
+
+      {hash && (
+        <p className="transaction-hash text-sm" style={{ marginTop: '0.8rem' }}>
+          Hash da Transação: {hash}
+        </p>
+      )}
+    </div>
+  );
 }

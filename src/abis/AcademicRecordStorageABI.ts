@@ -169,6 +169,46 @@ const AcademicRecordStorageABI = [
       {
         "components": [
           {
+            "internalType": "string",
+            "name": "code",
+            "type": "string"
+          },
+          {
+            "internalType": "string",
+            "name": "name",
+            "type": "string"
+          },
+          {
+            "internalType": "string",
+            "name": "courseType",
+            "type": "string"
+          },
+          {
+            "internalType": "int256",
+            "name": "numberOfSemesters",
+            "type": "int256"
+          }
+        ],
+        "internalType": "struct AcademicRecordStorage.BatchCoursePayload[]",
+        "name": "_coursesInfo",
+        "type": "tuple[]"
+      }
+    ],
+    "name": "addBatchCourses",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "_institutionAddress",
+        "type": "address"
+      },
+      {
+        "components": [
+          {
             "internalType": "address",
             "name": "studentAddress",
             "type": "address"
@@ -215,6 +255,31 @@ const AcademicRecordStorageABI = [
       }
     ],
     "name": "addBatchGrades",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "components": [
+          {
+            "internalType": "address",
+            "name": "studentAddress",
+            "type": "address"
+          },
+          {
+            "internalType": "address",
+            "name": "institutionAddress",
+            "type": "address"
+          }
+        ],
+        "internalType": "struct AcademicRecordStorage.BatchStudentPayload[]",
+        "name": "_studentsInfo",
+        "type": "tuple[]"
+      }
+    ],
+    "name": "addBatchStudents",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -314,6 +379,56 @@ const AcademicRecordStorageABI = [
       }
     ],
     "name": "addEncryptedInfoWithRecipientKey",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "_institutionAddress",
+        "type": "address"
+      },
+      {
+        "components": [
+          {
+            "internalType": "string",
+            "name": "courseCode",
+            "type": "string"
+          },
+          {
+            "internalType": "string",
+            "name": "disciplineCode",
+            "type": "string"
+          },
+          {
+            "internalType": "string",
+            "name": "name",
+            "type": "string"
+          },
+          {
+            "internalType": "string",
+            "name": "syllabus",
+            "type": "string"
+          },
+          {
+            "internalType": "int256",
+            "name": "workload",
+            "type": "int256"
+          },
+          {
+            "internalType": "int256",
+            "name": "creditCount",
+            "type": "int256"
+          }
+        ],
+        "internalType": "struct AcademicRecordStorage.FullDisciplinePayload[]",
+        "name": "_fullDisciplinesInfo",
+        "type": "tuple[]"
+      }
+    ],
+    "name": "addGlobalBatchDisciplines",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -489,6 +604,52 @@ const AcademicRecordStorageABI = [
   {
     "inputs": [
       {
+        "internalType": "string",
+        "name": "_courseCode",
+        "type": "string"
+      }
+    ],
+    "name": "getDisciplinesByCourseCode",
+    "outputs": [
+      {
+        "components": [
+          {
+            "internalType": "string",
+            "name": "code",
+            "type": "string"
+          },
+          {
+            "internalType": "string",
+            "name": "name",
+            "type": "string"
+          },
+          {
+            "internalType": "string",
+            "name": "syllabus",
+            "type": "string"
+          },
+          {
+            "internalType": "int256",
+            "name": "workload",
+            "type": "int256"
+          },
+          {
+            "internalType": "int256",
+            "name": "creditCount",
+            "type": "int256"
+          }
+        ],
+        "internalType": "struct AcademicRecordStorage.Discipline[]",
+        "name": "",
+        "type": "tuple[]"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
         "internalType": "address",
         "name": "_allowedAddress",
         "type": "address"
@@ -546,6 +707,47 @@ const AcademicRecordStorageABI = [
         "internalType": "struct AcademicRecordStorage.Institution",
         "name": "",
         "type": "tuple"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "_institutionAddress",
+        "type": "address"
+      }
+    ],
+    "name": "getInstitutionCourses",
+    "outputs": [
+      {
+        "components": [
+          {
+            "internalType": "string",
+            "name": "code",
+            "type": "string"
+          },
+          {
+            "internalType": "string",
+            "name": "name",
+            "type": "string"
+          },
+          {
+            "internalType": "string",
+            "name": "courseType",
+            "type": "string"
+          },
+          {
+            "internalType": "int256",
+            "name": "numberOfSemesters",
+            "type": "int256"
+          }
+        ],
+        "internalType": "struct AcademicRecordStorage.Course[]",
+        "name": "",
+        "type": "tuple[]"
       }
     ],
     "stateMutability": "view",

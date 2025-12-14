@@ -73,47 +73,12 @@ export default function Home() {
   return (
     <>
       <HeaderPage />
-      <Stack>
+      <Stack className="pt-16">
         {userPermission === userTypes.OWNER && <OwnerWrapper />}
         {userPermission === userTypes.INSTITUTION && <IntitutionWrapper />}
         {userPermission === userTypes.STUDENT && <StudentWrapper />}
         {userPermission === userTypes.VISITOR && <VisitorWrapper />}
       </Stack>
-    </>
-    // <div>
-    //   <DynamicWidget />
-    //   <AccountInfo />
-    //   <ImportExistingWallet />
-    //   <ReadContract />
-    //   <AddInstitution />
-    //   <CheckInstitutionStatus />
-    //   <AddInstitutionPublicKey />
-    //   <GetInstitutionDetails />
-
-    //   <AddStudent />
-    //   <AddStudentInformation />
-    //   <GetStudent />
-
-    //   <AddCourse />
-
-    //   <AddDiscipline />
-
-    //   <AddGrade />
-    //   <GetGrade />
-
-    //   <RequestAccess />
-    //   <AllowAccessToAddress />
-    //   {/*<RegisterBatchRecords />
-    //   <DisplayRegisteredRecords />
-    //   <DecryptRecord />
-    //   <GrantAccess />
-    //   <RevokeAccess />
-    //   <ViewGrantedAccess />
-    //   <PublicKeyRecovery
-    //     title="Chave Pública do Usuário Conectado"
-    //     onPublicKeyReady={handlePublicKeyRecovered}
-    //   />
-    //    */}
-    // </div>   
+    </>  
   );
 }
