@@ -1,36 +1,100 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 🎓 Academic Record Management DApp
 
-## Getting Started
+Sistema descentralizado para gestão de registros acadêmicos com foco em **escalabilidade**, **privacidade** e **baixas taxas de transação**. O projeto utiliza orquestração de dados em lote e carteiras embarcadas para uma experiência de usuário simplificada.
 
-First, run the development server:
+## 🔗 Repositórios do Ecossistema
+
+Este projeto é composto por três módulos independentes que trabalham de forma integrada. Certifique-se de clonar todos para a execução completa:
+
+* 🖥️ **DApp (Este repositório):** Interface Web3 para usuários e instituições.
+* 📜 **[Smart Contracts](https://github.com/cefet-records/records-smart-contract):** Contratos inteligentes em Solidity e ambiente de desenvolvimento Hardhat.
+* ⚙️ **[Records Batch](https://github.com/cefet-records/records-batch):** Pipeline de dados e orquestração de processos em lote com Apache Airflow.
+
+---
+
+## 🛠️ Pré-requisitos
+
+Antes de iniciar, certifique-se de possuir:
+
+* [Node.js](https://nodejs.org/) (v18+)
+* [Docker & Docker Compose](https://www.docker.com/)
+* Conta ativa na [Dynamic.xyz](https://www.dynamic.xyz/)
+* [Ngrok](https://ngrok.com/) instalado
+
+---
+
+## 📦 Guia de Instalação e Execução
+
+### 1. Smart Contracts ([Acessar Repo](https://github.com/cefet-records/records-smart-contract))
+
+Abra o repositório dos contratos e inicie o nó local:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+cd records-smart-contract
+npm install
+npx hardhat node
+
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Em um novo terminal, realize o deploy:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+npx hardhat ignition deploy ./ignition/modules/AcademicRecordStorage.ts --network localhost
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```
 
-## Learn More
+### 2. DApp (Interface Frontend)
 
-To learn more about Next.js, take a look at the following resources:
+Neste repositório, instale as dependências e inicie o servidor:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+npm install
+npm run dev
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```
 
-## Deploy on Vercel
+**Conexão com Dynamic (MPC):** É obrigatório expor a porta local para permitir a integração com as chaves de segurança da Dynamic:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```bash
+npx ngrok http 3000
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```
+
+> ⚠️ **Atenção:** É necessário configurar o domínio gerado pelo ngrok no painel administrativo da Dynamic para habilitar as carteiras embarcadas.
+
+### 3. Records Batch ([Acessar Repo](https://github.com/cefet-records/records-batch))
+
+Abra o repositório de orquestração e inicie os containers:
+
+```bash
+cd records-batch
+docker-compose up -d
+
+```
+
+Acesse o painel em `localhost:8080` para gerenciar os disparos via CSV.
+
+---
+
+## 🧪 Viabilidade Econômica (Rede Polygon)
+
+O sistema foi otimizado para a rede **Polygon**, garantindo custos baixíssimos mesmo em cenários de alta volumetria:
+
+| Cenário | Qtd. Notas | Custo Est. (BRL) |
+| --- | --- | --- |
+| Cenário 1 | 3 | R$ 0,0292 |
+| Cenário 4 | 500 | R$ 0,4992 |
+
+---
+
+## 🛡️ Segurança
+
+* **Cifragem Client-side:** Dados sensíveis são protegidos antes de sair do navegador do usuário.
+* **Algoritmos:** AES-256-CBC, PBKDF2 e ECIES.
+* **Soberania:** A instituição detém a chave mestra para a guarda de identidades e recuperação de dados.
+
+---
+
+**Projeto desenvolvido como Trabalho de Conclusão de Curso (TCC) no CEFET-RJ.**
+
+---
