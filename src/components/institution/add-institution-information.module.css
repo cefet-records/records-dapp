@@ -1,0 +1,9 @@
+.add-institution-input {
+  flex-grow: 1;
+  /* width: 20vw; */
+}
+
+.add-institution-button {
+  flex-grow: 1;
+  /* width: 10vw; */
+}

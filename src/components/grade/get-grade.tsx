@@ -9,6 +9,14 @@ import { useIsClient } from "../../app/is-client";
 import { decryptECIES } from '../../utils/cripto.utils';
 import { Hex } from "viem";
 import * as CryptoJS from "crypto-js"; // Importar CryptoJS
+import Card from "../card/card";
+import Typography from "@mui/material/Typography";
+import TextField from "@mui/material/TextField";
+import Button from "@mui/material/Button";
+import Stack from "@mui/material/Stack";
+import UploadCard from "../upload-card/upload-card";
+import { useSnackbar } from "../snackbar/snackbar-context";
+import { StudentHistory } from "./student-history";
 
 // Mock simples para createHash (mantido por enquanto)
 const createHashMock = (algorithm: string) => {
@@ -26,7 +34,7 @@ const createHashMock = (algorithm: string) => {
   };
 };
 
-interface GradeItem {
+export interface GradeItem {
   disciplineCode: string;
   disciplineName: string;
   workload: number;
@@ -53,6 +61,7 @@ const KDF_KEY_SIZE = 256 / 8; // 32 bytes para AES-256
 export function GetGrade() {
   const { address: connectedAddress, isConnected } = useAccount();
   const isClient = useIsClient();
+  const { showSnackbar } = useSnackbar();
 
   const [queryStudentAddress, setQueryStudentAddress] = useState<Address | "">("");
   const [queriedStudentGrades, setQueriedStudentGrades] = useState<GradeItem[] | null>(null);
@@ -194,6 +203,7 @@ export function GetGrade() {
   }, [backupFile, masterPasswordDecrypt]);
 
   const fetchStudentData = async () => {
+    showSnackbar("Buscando Histórico do estudante...", "info");
     setInternalStatusMessage("");
     setStudentInfo(null);
     setQueriedStudentGrades(null);
@@ -209,12 +219,6 @@ export function GetGrade() {
         return;
       }
     }
-
-    console.log("--- fetchStudentData Started ---");
-    console.log("isConnected:", isConnected);
-    console.log("connectedAddress:", connectedAddress);
-    console.log("queryStudentAddress (input):", queryStudentAddress);
-    console.log("derivedPrivateKey (present):", !!currentDerivedPrivateKey);
 
     if (!isConnected || !connectedAddress) {
       setInternalStatusMessage("Por favor, conecte sua carteira.");
@@ -276,7 +280,6 @@ export function GetGrade() {
         return;
       }
       // --- Fim da lógica de busca ---
-
 
       if (!studentEncryptedInformation || studentEncryptedInformation === '0x') {
         setInternalStatusMessage("Nenhuma informação encriptada disponível para sua permissão ou payload vazio.");
@@ -360,17 +363,6 @@ export function GetGrade() {
     fetchStudentData();
   };
 
-  const groupGradesBySemester = (grades: GradeItem[] | null): Record<number, GradeItem[]> => {
-    if (!grades) return {};
-    return grades.reduce((groups, grade) => {
-      if (!groups[grade.semester]) {
-        groups[grade.semester] = [];
-      }
-      groups[grade.semester].push(grade);
-      return groups;
-    }, {} as Record<number, GradeItem[]>);
-  };
-
   useEffect(() => {
     setIsPrivateKeyDerived(false);
     setDerivedPrivateKey(null);
@@ -386,156 +378,65 @@ export function GetGrade() {
     setInternalStatusMessage("");
   }, [backupFile, masterPasswordDecrypt]);
 
-
   const isDisabled = !isClient || isFetching || !isConnected || !studentAddressValid || !backupFile || !masterPasswordDecrypt || masterPasswordDecrypt.length < 12;
 
   return (
-    <div className="get-grade-container" style={{ marginTop: '1.5rem', border: '1px solid #007bff', padding: '1rem', borderRadius: '4px' }}>
-      <h2>Obter Histórico Escolar</h2>
-      <p className="text-sm" style={{ marginBottom: '10px', color: 'gray' }}>
-        Faça upload do arquivo de backup (.json) da chave privada e insira a senha mestra para descriptografar os dados do estudante e visualizar o histórico.
-      </p>
-
-      {!isConnected || !connectedAddress ? (
-        <p style={{ color: 'orange', marginBottom: '1rem' }}>⚠️ Conecte sua carteira para buscar o histórico.</p>
-      ) : (
-        <form className="form space-y-3" onSubmit={handleSubmit}>
-          <input
-            type="text"
-            placeholder="Endereço do Estudante (0x...)"
+    <Card>
+      <Stack>
+        <Typography variant="h4" component="h4">Obter Histórico Escolar</Typography>
+        <Typography variant="body1" component="p" className="info-text">
+          Faça upload do arquivo de backup (.json) da chave privada e insira a senha mestra para descriptografar os dados do estudante e visualizar o histórico.
+        </Typography>
+      </Stack>
+      <form onSubmit={handleSubmit}>
+        <Stack gap={2}>
+          <TextField
+            label="Endereço do Estudante (0x...)"
+            variant="outlined"
+            required
             value={queryStudentAddress}
             onChange={(e) => {
               setQueryStudentAddress(e.target.value as Address);
               setInternalStatusMessage("");
             }}
-            className="w-full p-2 border rounded"
             disabled={isFetching}
+            size="small"
           />
-          {!studentAddressValid && queryStudentAddress !== '' && (
-            <p className="text-sm text-red-500">⚠️ Endereço do estudante inválido.</p>
-          )}
 
-          <div style={{ marginTop: '1rem' }}>
-            <label htmlFor="backupFile" style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
-              Upload do Arquivo de Chave Privada Criptografada (.json):
-            </label>
-            <input
-              id="backupFile"
-              type="file"
-              accept=".json"
-              onChange={handleFileChange}
-              className="w-full p-2 border rounded"
-              disabled={isFetching}
-              style={{ backgroundColor: '#fffbe6' }}
-            />
-            {backupFile && <p className="text-sm text-gray-600 mt-1">Arquivo selecionado: {backupFile.name}</p>}
-          </div>
+          {backupFile && <p className="info-text">Arquivo selecionado: {backupFile.name}</p>}
+          <UploadCard label="Upload do Arquivo de Chave Privada Criptografada (.json)" handleFileChange={handleFileChange} />
 
-          <div style={{ marginBottom: '1rem' }}>
-            <label htmlFor="masterPasswordDecrypt" style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
+          <Stack>
+            <label htmlFor="masterPasswordDecrypt2" style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
               Senha Mestra (usada para criptografar o arquivo de backup):
             </label>
-            <input
-              id="masterPasswordDecrypt"
+            <TextField
+              id="masterPasswordDecrypt2"
+              label="Mínimo 12 caracteres"
               type="password"
+              variant="outlined"
+              required
               value={masterPasswordDecrypt}
               onChange={(e) => setMasterPasswordDecrypt(e.target.value)}
-              placeholder="Mínimo 12 caracteres"
-              style={{ width: '100%', padding: '0.5rem', border: '1px solid #ccc', borderRadius: '4px', boxSizing: 'border-box', backgroundColor: '#fffbe6' }}
-              required
               disabled={isFetching}
+              size="small"
             />
-            {masterPasswordDecrypt.length > 0 && masterPasswordDecrypt.length < 12 && (
-              <p className="text-sm text-red-500 mt-1">⚠️ A senha mestra deve ter pelo menos 12 caracteres.</p>
-            )}
-          </div>
+          </Stack>
 
-          {isPrivateKeyDerived && !internalStatusMessage.includes('Falha') && !internalStatusMessage.includes('Erro') && !isFetching && (
-            <p style={{ color: 'green', marginTop: '0.8rem' }}>✅ Chave privada derivada com sucesso do arquivo e senha.</p>
-          )}
-
-
-          <button type="submit" disabled={isDisabled}
-            style={{ padding: '0.5rem 1rem', backgroundColor: '#007bff', color: 'white', borderRadius: '4px', opacity: isDisabled ? 0.6 : 1, marginTop: '10px' }}>
-            {isFetching ? "Buscando Histórico..." : "Obter Histórico"}
-          </button>
-        </form>
-      )}
-
-      {internalStatusMessage && (
-        <p className={`status-message ${internalStatusMessage.includes('Erro') || internalStatusMessage.includes('Falha') ? 'text-red-500' : 'text-green-700'}`}
-          style={{ marginTop: '0.8rem', fontWeight: 'bold' }}>
-          {internalStatusMessage}
-        </p>
-      )}
+          <Button type="submit" className="register-button" disabled={isDisabled}>
+            Obter Histórico
+          </Button>
+        </Stack>
+      </form>
 
       {studentInfo?.name && queriedStudentGrades && institutionInfo && (
-        <div style={{ marginTop: '1.5rem', padding: '1rem', border: '1px solid #ddd', borderRadius: '4px', backgroundColor: '#f9f9f9' }}>
-          <h3>Detalhes do Histórico</h3>
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50 institution-info">
-              <tr>
-                <td colSpan={7} className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  <strong>{institutionInfo.institutionName}</strong>
-                  <br />
-                  {institutionInfo.courseCode} - {institutionInfo.courseName}
-                </td>
-              </tr>
-            </thead>
-            <thead className="bg-gray-50 student-info">
-              <tr>
-                <td colSpan={7} className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  <strong>Nome do Estudante: {studentInfo.name}</strong>
-                  <br />
-                  Documento do Estudante: {studentInfo.document}
-                  <br />
-                  Endereço do Estudante: {queryStudentAddress}
-                  <br />
-                  Hash do Estudante (Blockchain): {studentInfo.hash}
-                  <br />
-                  Hash do Estudante (calculado): {studentInfo.calculatedHash}
-                </td>
-              </tr>
-            </thead>
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Código</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Disciplina</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Carga Horária</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Créditos</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nota</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Frequência</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {Object.entries(groupGradesBySemester(queriedStudentGrades)).map(
-                ([semester, grades]: [string, GradeItem[]]) => (
-                  <React.Fragment key={semester}>
-                    <tr className="subheader bg-gray-100">
-                      <td colSpan={7} className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                        Semestre {semester}
-                      </td>
-                    </tr>
-                    {grades.map((grade: GradeItem) => (
-                      <tr key={`${grade.disciplineCode}-${grade.year}-${grade.semester}`}>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{grade.disciplineCode}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{grade.disciplineName}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center">{grade.workload}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center">{grade.creditCount}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center">{grade.grade.toFixed(2)}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center">{grade.attendance}%</td>
-                        <td className={`px-6 py-4 whitespace-nowrap text-sm font-medium ${grade.status ? 'text-green-600' : 'text-red-600'}`}>
-                          {grade.status ? 'Aprovado' : 'Reprovado'}
-                        </td>
-                      </tr>
-                    ))}
-                  </React.Fragment>
-                ))}
-            </tbody>
-          </table>
-        </div>
+        <StudentHistory
+          institutionInfo={institutionInfo}
+          studentInfo={studentInfo}
+          queryStudentAddress={queryStudentAddress}
+          queriedStudentGrades={queriedStudentGrades}
+        />
       )}
-    </div>
+    </Card >
   );
 }

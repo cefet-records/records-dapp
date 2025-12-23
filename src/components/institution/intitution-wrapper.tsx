@@ -10,13 +10,10 @@ import { GetStudent } from '../student/get-student'
 
 const IntitutionWrapper = () => {
   return (
-    <Stack>
+    <Stack gap={4} mb={4}>
       <AddInstitutionInfo />
       <AddStudent />
       <GetStudent />
-      <AddCourse />
-      <AddDiscipline />
-      <AddGrade />
       <GetGrade />
     </Stack>
   )

@@ -1,0 +1,112 @@
+/* Page background */
+.page {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #f8fafc, #eff6ff, #f1f5f9);
+}
+
+/* Header */
+.header {
+  background: linear-gradient(90deg, #1e3a8a, #1e40af, #1e3a8a);
+  color: white;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+  border-bottom: 4px solid #22c55e;
+}
+
+/* Container */
+.container {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 0 16px;
+}
+
+/* Header content */
+.headerContent {
+  justify-content: space-between;
+  align-items: center;
+  height: 70px;
+}
+
+/* Brand */
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.iconWrapper {
+  background-color: white;
+  padding: 8px;
+  border-radius: 8px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
+}
+
+.icon {
+  width: 32px;
+  height: 32px;
+  color: #1e3a8a;
+}
+
+.title {
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+
+.subtitle {
+  font-size: 0.875rem;
+  color: #bfdbfe;
+}
+
+/* Actions */
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+/* Blockchain status */
+.blockchainStatus {
+  display: none;
+  align-items: center;
+  gap: 8px;
+  background-color: rgba(30, 64, 175, 0.5);
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 0.875rem;
+}
+
+.shieldIcon {
+  width: 16px;
+  height: 16px;
+  color: #4ade80;
+}
+
+/* Menu button (mobile) */
+.menuButton {
+  background: none;
+  border: none;
+  padding: 8px;
+  cursor: pointer;
+  border-radius: 8px;
+  color: white;
+  transition: background-color 0.2s ease;
+}
+
+.menuButton:hover {
+  background-color: #1e40af;
+}
+
+.menuIcon {
+  width: 24px;
+  height: 24px;
+}
+
+/* Responsive */
+@media (min-width: 768px) {
+  .blockchainStatus {
+    display: flex;
+  }
+
+  .menuButton {
+    display: none;
+  }
+}
