@@ -15,7 +15,7 @@ import { AddGlobalBatchDisciplines } from '../discipline/add-batch-discipline'
 
 const IntitutionWrapper = () => {
   return (
-    <Stack>
+    <Stack gap={4} mb={4}>
       <AddInstitutionInfo />
       <AddBatchStudents />
       {/* <AddStudent /> */}

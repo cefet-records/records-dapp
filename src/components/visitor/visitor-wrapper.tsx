@@ -5,7 +5,7 @@ import { GetGrade } from '../grade/get-grade'
 
 const VisitorWrapper = () => {
   return (
-    <Stack>
+    <Stack gap={4} mb={4}>
       <RequestAccess />
       <GetGrade />
     </Stack>

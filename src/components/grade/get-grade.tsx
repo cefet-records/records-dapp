@@ -20,7 +20,32 @@ enum userTypes {
   VISITOR = 'viewer'
 }
 
-interface GradeItem {
+import Card from "../card/card";
+import Typography from "@mui/material/Typography";
+import TextField from "@mui/material/TextField";
+import Button from "@mui/material/Button";
+import Stack from "@mui/material/Stack";
+import UploadCard from "../upload-card/upload-card";
+import { useSnackbar } from "../snackbar/snackbar-context";
+import { StudentHistory } from "./student-history";
+
+// Mock simples para createHash (mantido por enquanto)
+const createHashMock = (algorithm: string) => {
+  return {
+    update: (data: string) => ({
+      digest: (encoding: 'hex') => {
+        if (algorithm === 'sha256') {
+          console.warn("Using mock crypto.createHash for SHA256. Not suitable for production.");
+          // Retorna um hash mock, idealmente você usaria uma implementação real para segurança
+          return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+        }
+        return '';
+      },
+    }),
+  };
+};
+
+export interface GradeItem {
   disciplineCode: string;
   disciplineName: string;
   workload: number;
@@ -90,6 +115,7 @@ const loadBackupFromLocalStorage = (address: Address, prefix: string): BackupFil
 export function GetGrade() {
   const { address: connectedAddress, isConnected } = useAccount();
   const isClient = useIsClient();
+  const { showSnackbar } = useSnackbar();
 
   const [queryStudentAddress, setQueryStudentAddress] = useState<Address | "">("");
   const [queriedStudentGrades, setQueriedStudentGrades] = useState<GradeItem[] | null>(null);
@@ -273,6 +299,7 @@ export function GetGrade() {
 
 
   const fetchStudentData = async () => {
+    showSnackbar("Buscando Histórico do estudante...", "info");
     setInternalStatusMessage("");
     setStudentInfo(null);
     setQueriedStudentGrades(null);
@@ -304,6 +331,14 @@ export function GetGrade() {
     let currentPermission = userPermission;
     if (!currentPermission) {
       setInternalStatusMessage("Não foi possível determinar a permissão do usuário.");
+    if (!isConnected || !connectedAddress) {
+      setInternalStatusMessage("Por favor, conecte sua carteira.");
+      setIsFetching(false);
+      return;
+    }
+
+    if (!studentAddressValid) {
+      setInternalStatusMessage("Por favor, insira um endereço de estudante válido.");
       setIsFetching(false);
       return;
     }
@@ -417,17 +452,6 @@ export function GetGrade() {
     fetchStudentData();
   };
 
-  const groupGradesBySemester = (grades: GradeItem[] | null): Record<number, GradeItem[]> => {
-    if (!grades) return {};
-    return grades.reduce((groups, grade) => {
-      if (!groups[grade.semester]) {
-        groups[grade.semester] = [];
-      }
-      groups[grade.semester].push(grade);
-      return groups;
-    }, {} as Record<number, GradeItem[]>);
-  };
-
   useEffect(() => {
     setIsPrivateKeyDerived(false);
     setDerivedPrivateKey(null);
@@ -445,34 +469,34 @@ export function GetGrade() {
   }, [masterPasswordDecrypt]);
 
 
-  const isDisabled = !isClient || isFetching || !isConnected || !studentAddressValid || !encryptedBackupData || !masterPasswordDecrypt || masterPasswordDecrypt.length < 12 || isFetchingPermission;
+  // const isDisabled = !isClient || isFetching || !isConnected || !studentAddressValid || !encryptedBackupData || !masterPasswordDecrypt || masterPasswordDecrypt.length < 12 || isFetchingPermission;
 
   const backupSource = currentRoleMap?.displayName || "Visitante/Geral";
   const showUploadField = !encryptedBackupData && currentRoleMap !== null;
-
+  const isDisabled = !isClient || isFetching || !isConnected || !studentAddressValid || !backupFile || !masterPasswordDecrypt || masterPasswordDecrypt.length < 12;
 
   return (
-    <div className="get-grade-container" style={{ marginTop: '1.5rem', border: '1px solid #007bff', padding: '1rem', borderRadius: '4px' }}>
-      <h2>Obter Histórico Escolar</h2>
-
-      {!connectedAddressValid ? (
-        <p style={{ color: 'orange', marginBottom: '1rem' }}>⚠️ Conecte sua carteira para buscar o histórico.</p>
-      ) : (
-        <form className="form space-y-3" onSubmit={handleSubmit}>
-          <input
-            type="text"
-            placeholder="Endereço do Estudante (0x...)"
+    <Card>
+      <Stack>
+        <Typography variant="h4" component="h4">Obter Histórico Escolar</Typography>
+        <Typography variant="body1" component="p" className="info-text">
+          Faça upload do arquivo de backup (.json) da chave privada e insira a senha mestra para descriptografar os dados do estudante e visualizar o histórico.
+        </Typography>
+      </Stack>
+      <form onSubmit={handleSubmit}>
+        <Stack gap={2}>
+          <TextField
+            label="Endereço do Estudante (0x...)"
+            variant="outlined"
+            required
             value={queryStudentAddress}
             onChange={(e) => {
               setQueryStudentAddress(e.target.value as Address);
               setInternalStatusMessage("");
             }}
-            className="w-full p-2 border rounded"
             disabled={isFetching}
+            size="small"
           />
-          {!studentAddressValid && queryStudentAddress !== '' && (
-            <p className="text-sm text-red-500">⚠️ Endereço do estudante inválido.</p>
-          )}
 
           {/* UPLOAD DE ARQUIVO (SÓ VISÍVEL SE NADA FOI CARREGADO DO LOCALSTORAGE) */}
           {showUploadField && (
@@ -496,10 +520,19 @@ export function GetGrade() {
           <div style={{ marginBottom: '1rem' }}>
             <label htmlFor="masterPasswordDecrypt" style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
               Senha:
+          {backupFile && <p className="info-text">Arquivo selecionado: {backupFile.name}</p>}
+          <UploadCard label="Upload do Arquivo de Chave Privada Criptografada (.json)" handleFileChange={handleFileChange} />
+
+          <Stack>
+            <label htmlFor="masterPasswordDecrypt2" style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
+              Senha Mestra (usada para criptografar o arquivo de backup):
             </label>
-            <input
-              id="masterPasswordDecrypt"
+            <TextField
+              id="masterPasswordDecrypt2"
+              label="Mínimo 12 caracteres"
               type="password"
+              variant="outlined"
+              required
               value={masterPasswordDecrypt}
               onChange={(e) => setMasterPasswordDecrypt(e.target.value)}
               placeholder="Mínimo 12 caracteres"
@@ -521,13 +554,13 @@ export function GetGrade() {
             <p style={{ color: 'green', marginTop: '0.8rem' }}>✅ Chave privada derivada com sucesso do arquivo e senha.</p>
           )}
 
-
+{/* 
           <button type="submit" disabled={isDisabled}
             style={{ padding: '0.5rem 1rem', backgroundColor: '#007bff', color: 'white', borderRadius: '4px', opacity: isDisabled ? 0.6 : 1, marginTop: '10px' }}>
             {isFetching ? "Buscando Histórico..." : "Obter Histórico"}
           </button>
         </form>
-      )}
+      )} */}
 
       {/* {internalStatusMessage && (
         <p className={`status-message ${internalStatusMessage.includes('Erro') || internalStatusMessage.includes('Falha') ? 'text-red-500' : 'text-green-700'}`}
@@ -535,74 +568,25 @@ export function GetGrade() {
           {internalStatusMessage}
         </p>
       )} */}
+              disabled={isFetching}
+              size="small"
+            />
+          </Stack>
+
+          <Button type="submit" className="register-button" disabled={isDisabled}>
+            Obter Histórico
+          </Button>
+        </Stack>
+      </form>
 
       {studentInfo?.name && queriedStudentGrades && institutionInfo && (
-        <div style={{ marginTop: '1.5rem', padding: '1rem', border: '1px solid #ddd', borderRadius: '4px', backgroundColor: '#f9f9f9' }}>
-          <h3>Detalhes do Histórico</h3>
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50 institution-info">
-              <tr>
-                <td colSpan={7} className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  <strong>{institutionInfo.institutionName}</strong>
-                  <br />
-                  {institutionInfo.courseCode} - {institutionInfo.courseName}
-                </td>
-              </tr>
-            </thead>
-            <thead className="bg-gray-50 student-info">
-              <tr>
-                <td colSpan={7} className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  <strong>Nome do Estudante: {studentInfo.name}</strong>
-                  <br />
-                  Documento do Estudante: {studentInfo.document}
-                  <br />
-                  Endereço do Estudante: {queryStudentAddress}
-                  <br />
-                  Hash do Estudante (Blockchain): {studentInfo.hash}
-                  <br />
-                  Hash do Estudante (calculado): {studentInfo.calculatedHash}
-                </td>
-              </tr>
-            </thead>
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Código</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Disciplina</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Carga Horária</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Créditos</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nota</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Frequência</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {Object.entries(groupGradesBySemester(queriedStudentGrades)).map(
-                ([semester, grades]: [string, GradeItem[]]) => (
-                  <React.Fragment key={semester}>
-                    <tr className="subheader bg-gray-100">
-                      <td colSpan={7} className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                        Semestre {semester}
-                      </td>
-                    </tr>
-                    {grades.map((grade: GradeItem) => (
-                      <tr key={`${grade.disciplineCode}-${grade.year}-${grade.semester}`}>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{grade.disciplineCode}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{grade.disciplineName}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center">{grade.workload}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center">{grade.creditCount}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center">{grade.grade.toFixed(2)}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center">{grade.attendance}%</td>
-                        <td className={`px-6 py-4 whitespace-nowrap text-sm font-medium ${grade.status ? 'text-green-600' : 'text-red-600'}`}>
-                          {grade.status ? 'Aprovado' : 'Reprovado'}
-                        </td>
-                      </tr>
-                    ))}
-                  </React.Fragment>
-                ))}
-            </tbody>
-          </table>
-        </div>
+        <StudentHistory
+          institutionInfo={institutionInfo}
+          studentInfo={studentInfo}
+          queryStudentAddress={queryStudentAddress}
+          queriedStudentGrades={queriedStudentGrades}
+        />
       )}
-    </div>
+    </Card >
   );
 }

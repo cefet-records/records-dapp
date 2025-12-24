@@ -7,6 +7,14 @@ import { WagmiProvider } from "wagmi";
 import { config } from "@/config/wagmi.config";
 import { DynamicWagmiConnector } from "@dynamic-labs/wagmi-connector";
 import { evmNetworks } from "@/config/chains.config";
+import './globals.css';
+import { Roboto } from 'next/font/google'
+import { SnackbarProvider } from "@/components/snackbar/snackbar-context";
+
+const roboto = Roboto({
+  weight: ['300', '400', '500', '700'],
+  subsets: ['latin'],
+})
 
 const queryClient = new QueryClient();
 
@@ -16,8 +24,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="h-full">
-      <body className="min-h-screen">
+    <html lang="en">
+      <body className={roboto.className}>
         <DynamicContextProvider
           settings={{
             environmentId: process.env.NEXT_PUBLIC_DYNAMIC_KEY!,
@@ -28,7 +36,9 @@ export default function RootLayout({
           <WagmiProvider config={config}>
             <QueryClientProvider client={queryClient}>
               <DynamicWagmiConnector>
-                {children}
+                <SnackbarProvider>
+                  {children}
+                </SnackbarProvider>
               </DynamicWagmiConnector>
             </QueryClientProvider>
           </WagmiProvider>

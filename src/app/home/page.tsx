@@ -73,7 +73,8 @@ export default function Home() {
   return (
     <>
       <HeaderPage />
-      <Stack className="pt-16">
+
+      <Stack className="container" mt={4}>
         {userPermission === userTypes.OWNER && <OwnerWrapper />}
         {userPermission === userTypes.INSTITUTION && <IntitutionWrapper />}
         {userPermission === userTypes.STUDENT && <StudentWrapper />}

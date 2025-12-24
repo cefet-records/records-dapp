@@ -7,7 +7,8 @@ import { GetGrade } from '../grade/get-grade';
 
 const StudentWrapper = (): React.JSX.Element => {
   return (
-    <Stack>
+    <Stack gap={4} mb={4}>
+      <AllowAccessToAddress />
       <AddStudentInformation />
       <GetStudent />
       <GetGrade />

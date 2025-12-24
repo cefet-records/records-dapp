@@ -14,6 +14,13 @@ import { wagmiContractConfig } from "@/abis/AcademicRecordStorageABI";
 import { encryptECIES } from "@/utils/cripto.utils";
 import { randomBytes } from "@noble/ciphers/utils.js";
 import * as CryptoJS from "crypto-js";
+import Card from "../card/card";
+import Stack from "@mui/material/Stack";
+import Typography from "@mui/material/Typography";
+import TextField from "@mui/material/TextField";
+import Button from "@mui/material/Button";
+import { useSnackbar } from "../snackbar/snackbar-context";
+import TransactionInfo from "../transaction-info/transaction-info";
 
 // Chave de LocalStorage Única por Estudante/Endereço
 const LOCAL_STORAGE_KEY_PREFIX = "studentEncryptedPrivateKey_";
@@ -105,6 +112,15 @@ export function AddStudentInformation(): JSX.Element | null {
     specialChar: false,
   });
 
+export function AddStudentInformation(): JSX.Element {
+  const { address, isConnected } = useAccount();
+
+  const { showSnackbar } = useSnackbar();
+
+  const [institutionAddress, setInstitutionAddress] = useState<Address | ''>('');
+  const [name, setName] = useState("");
+  const [document, setDocument] = useState("");
+  const [masterPassword, setMasterPassword] = useState<string>("");
 
   const [downloadLink, setDownloadLink] = useState<string | null>(null);
   const [generatedStudentPublicKey, setGeneratedStudentPublicKey] = useState<Hex | null>(null);
@@ -153,6 +169,13 @@ export function AddStudentInformation(): JSX.Element | null {
   const { isLoading: isTxConfirming, isSuccess: isTxConfirmed } = useWaitForTransactionReceipt({ hash: addInfoHash });
 
   // --- HOOK 3: DADOS DA INSTITUIÇÃO ---
+  const [generatedStudentPrivateKeyHex, setGeneratedStudentPrivateKeyHex] = useState<Hex | null>(null);
+
+  const { data: addInfoHash, error: writeError, isPending: isTxPending, writeContract } = useWriteContract();
+  const { isLoading: isTxConfirming, isSuccess: isTxConfirmed } = useWaitForTransactionReceipt({ hash: addInfoHash });
+
+  const institutionAddressValid = isAddress(institutionAddress);
+
   const {
     data: institutionData,
     isLoading: isLoadingInst,
@@ -188,6 +211,8 @@ export function AddStudentInformation(): JSX.Element | null {
     }
   }, [isDownloadTriggered, setStatus, setIsDownloadTriggered]);
 
+  const KDF_ITERATIONS = 262144;
+  const KDF_KEY_SIZE = 256 / 8;
 
   const handleGenerateKeysAndAddInfo = async (e: FormEvent<HTMLFormElement>): Promise<void> => {
     e.preventDefault();
@@ -220,6 +245,14 @@ export function AddStudentInformation(): JSX.Element | null {
 
     setIsGeneratingKeys(true);
     setStatus("Gerando par de chaves e preparando dados...");
+    // Resetar estados relevantes para uma nova tentativa
+    setKeyGenerationError(null);
+    setDownloadLink(null);
+    setGeneratedStudentPublicKey(null);
+    setGeneratedStudentPrivateKeyHex(null);
+
+    setIsGeneratingKeys(true);
+    showSnackbar("Iniciando geração de chaves e adição de informações...", "info");
 
     try {
       // 1. Gerar Par de Chaves ECDSA (secp256k1) para o Estudante
@@ -230,6 +263,7 @@ export function AddStudentInformation(): JSX.Element | null {
       const publicKeyECDSAHex = bytesToHex(publicKeyECDSABytes) as Hex;
 
       setGeneratedStudentPublicKey(publicKeyECDSAHex);
+      setGeneratedStudentPrivateKeyHex(privateKeyECDSAHex);
 
       // 2. Criptografar a Chave Privada do Estudante com a Senha Mestra (PBKDF2 + AES)
       const saltKDF = CryptoJS.lib.WordArray.random(128 / 8);
@@ -239,6 +273,8 @@ export function AddStudentInformation(): JSX.Element | null {
       });
 
       const iv = CryptoJS.lib.WordArray.random(128 / 8);
+      // GERAÇÃO DO IV E SUA INCLUSÃO NA CRIPTOGRAFIA E NO BACKUP
+      const iv = CryptoJS.lib.WordArray.random(128 / 8); // <<< Gerar o IV aqui
 
       const encryptedStudentPrivateKey = CryptoJS.AES.encrypt(privateKeyECDSAHex, keyKDF, {
         mode: CryptoJS.mode.CBC,
@@ -261,6 +297,20 @@ export function AddStudentInformation(): JSX.Element | null {
       const blob = new Blob([backupContent], { type: "text/plain;charset=utf-8" });
       const url = URL.createObjectURL(blob);
       setDownloadLink(url); // Define o link de download aqui
+        iv: iv, // <<< Passar o IV para a criptografia
+      }).toString();
+
+      // 3. Preparar e oferecer o download do arquivo TXT de backup
+      const backupData = {
+        encryptedPrivateKey: encryptedStudentPrivateKey,
+        salt: saltKDF.toString(CryptoJS.enc.Hex),
+        kdfIterations: KDF_ITERATIONS,
+        iv: iv.toString(CryptoJS.enc.Hex), // <<< ADICIONAR ESTA LINHA: Salvar o IV no backup!
+      };
+      const backupContent = JSON.stringify(backupData, null, 2);
+      const blob = new Blob([backupContent], { type: "text/plain;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      setDownloadLink(url);
 
       // 4. Preparar dados pessoais para criptografia e envio on-chain
       const saltPersonalDataBytes = randomBytes(16);
@@ -268,6 +318,7 @@ export function AddStudentInformation(): JSX.Element | null {
 
       // CORREÇÃO APLICADA AQUI: Usando studentDocument
       const personalInformation: PersonalInformation = { name, document: studentDocument, salt: saltPersonalDataHex };
+      const personalInformation: PersonalInformation = { name, document, salt: saltPersonalDataHex };
       const informationString = JSON.stringify(personalInformation);
 
       const publicHashHex = keccak256(toBytes(informationString)) as Hex;
@@ -496,5 +547,136 @@ export function AddStudentInformation(): JSX.Element | null {
         </p>
       )}
     </div>
+      showSnackbar("Falha ao adicionar informações!", "error");
+      setIsGeneratingKeys(false);
+      setDownloadLink(null);
+      setGeneratedStudentPublicKey(null);
+      setGeneratedStudentPrivateKeyHex(null);
+    }
+  };
+
+  useEffect(() => {
+    if (isTxConfirmed) {
+      showSnackbar("Informação do estudante adicionada com sucesso!", "success");
+      setInstitutionAddress('');
+      setName('');
+      setDocument('');
+      setMasterPassword('');
+      setIsGeneratingKeys(false);
+    }
+  }, [isTxConfirmed]);
+
+  const isAddInfoDisabled = isTxPending || isLoadingInst || !isConnected ||
+    !institutionAddressValid || !name || !document ||
+    isGeneratingKeys ||
+    !masterPassword || masterPassword.length < 12;
+
+  const isInstitutionPublicKeyInvalid = institutionAddressValid && !isLoadingInst && !isInstError &&
+    (!institutionData || (institutionData as InstitutionContractData).publicKey?.length < 132 || (institutionData as InstitutionContractData).publicKey === '0x');
+
+  useEffect(() => {
+    if (keyGenerationError) {
+      showSnackbar("Erro de Geração de Chave!", "error");
+    }
+  }, [keyGenerationError, showSnackbar]);
+
+  useEffect(() => {
+    if (writeError) {
+      showSnackbar("Erro na transação com a blockchain!", "error");
+    }
+  }, [writeError, showSnackbar]);
+
+  return (
+    <Card>
+      <Stack>
+        <Typography variant="h4" component="h4">Adicionar Informação Pessoal do Estudante</Typography>
+        <Typography variant="body1" component="p" className="info-text">
+          Suas informações são cifradas para você e para a instituição de auditoria. Sua chave pública de encriptação é registrada.
+          Você precisará de sua senha mestra e do arquivo de backup da chave privada para descriptografar seus dados.
+        </Typography>
+      </Stack>
+
+      <form className="form space-y-3" onSubmit={handleGenerateKeysAndAddInfo}>
+        <Stack gap={2}>
+          <TextField
+            label="Endereço da Instituição (0x...)"
+            variant="outlined"
+            required
+            name="institutionAddress"
+            onChange={(e) => {
+              setInstitutionAddress(e.target.value as Address | '');
+            }}
+            size="small"
+            value={institutionAddress}
+            disabled={isGeneratingKeys || isTxPending}
+            error={!institutionAddressValid && institutionAddress !== '' || isInstitutionPublicKeyInvalid}
+            helperText={
+              !institutionAddressValid && institutionAddress !== ''
+                ? 'Endereço da instituição inválido.'
+                : isInstitutionPublicKeyInvalid ? 'A instituição existe, mas não tem chave pública de encriptação ECC registrada no formato correto (0x04...)' : ''
+            }
+          />
+          <TextField
+            label="Nome Completo"
+            variant="outlined"
+            required
+            name="institutionName"
+            value={name}
+            onChange={(e) => {
+              setName(e.target.value)
+            }}
+            size="small"
+            disabled={isGeneratingKeys || isTxPending}
+          />
+          <TextField
+            label="Documento"
+            variant="outlined"
+            required
+            value={document}
+            name="institutionDocument"
+            onChange={(e) => {
+              setDocument(e.target.value);
+            }}
+            size="small"
+            disabled={isGeneratingKeys || isTxPending}
+          />
+          <Stack>
+            <label htmlFor="masterPassword" style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
+              Sua Senha Mestra (para Criptografar sua Chave Privada):
+            </label>
+            <TextField
+              id="masterPassword"
+              label="Mínimo 12 caracteres"
+              type="password"
+              variant="outlined"
+              required
+              value={masterPassword}
+              onChange={(e) => setMasterPassword(e.target.value)}
+              disabled={isGeneratingKeys || isTxPending}
+              size="small"
+            />
+          </Stack>
+          <Button type="submit" className="register-button" disabled={isAddInfoDisabled || isInstitutionPublicKeyInvalid}>
+            Gerar Chaves e Adicionar Informação do Estudante
+          </Button>
+        </Stack>
+      </form>
+
+      {generatedStudentPublicKey && !keyGenerationError && (
+        <TransactionInfo label="Chave Pública ECDSA Gerada:" hash={generatedStudentPublicKey} />
+      )}
+
+      {downloadLink && isTxConfirmed && (
+        <Stack gap={2}>
+          <Stack>
+            <p className="info-text">Importante: Baixe seu Arquivo de Chave Privada Criptografada!</p>
+            <p className="info-text">Este arquivo, junto com sua Senha Mestra, é essencial para descriptografar seus dados acadêmicos. Mantenha-o seguro e não o compartilhe. Faça um backup em local seguro.</p>
+          </Stack>
+          <a href={downloadLink} download={`${address}_student_encrypted_private_key.json`} className="download-button">
+            Download Chave Privada Criptografada (JSON)
+          </a>
+        </Stack>
+      )}
+    </Card>
   );
 }

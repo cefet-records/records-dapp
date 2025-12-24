@@ -1,108 +1,123 @@
-import { FormEvent, JSX, useState } from "react";
+import { FormEvent, JSX, useEffect, useState } from "react";
 import {
-    type BaseError,
-    useWriteContract,
-    useWaitForTransactionReceipt
+  type BaseError,
+  useWriteContract,
+  useWaitForTransactionReceipt
 } from "wagmi";
 import { Address } from "viem";
 import { wagmiContractConfig } from "@/abis/AcademicRecordStorageABI";
+import Card from "../card/card";
+import Typography from "@mui/material/Typography";
+import Stack from "@mui/material/Stack";
+import TextField from "@mui/material/TextField";
+import Button from "@mui/material/Button";
+
+import styles from "./add-institution.module.css";
+import { useSnackbar } from "../snackbar/snackbar-context";
+import TransactionInfo from "../transaction-info/transaction-info";
 
 export default function AddInstitution(): JSX.Element {
-    const [institutionAddress, setInstitutionAddress] = useState<string>("");
-    const [statusMessage, setStatusMessage] = useState<string>("");
+  const [institutionAddress, setInstitutionAddress] = useState<string>("");
 
-    const {
-        data: registerInstitutionHash,
-        error: registerInstitutionError,
-        isPending: isRegisteringInstitution,
-        writeContract: writeRegisterInstitution,
-    } = useWriteContract();
+  const { showSnackbar } = useSnackbar();
 
-    const {
-        isLoading: isConfirmingRegistration,
-        isSuccess: isInstitutionRegistered,
-        error: registerInstitutionConfirmError,
-    } = useWaitForTransactionReceipt({ hash: registerInstitutionHash });
+  const {
+    data: registerInstitutionHash,
+    error: registerInstitutionError,
+    isPending: isRegisteringInstitution,
+    writeContract: writeRegisterInstitution,
+  } = useWriteContract();
 
-    const handleSubmit = async (e: FormEvent<HTMLFormElement>): Promise<void> => {
-        e.preventDefault();
-        setStatusMessage("");
+  const {
+    isLoading: isConfirmingRegistration,
+    isSuccess: isInstitutionRegistered,
+    error: registerInstitutionConfirmError,
+  } = useWaitForTransactionReceipt({ hash: registerInstitutionHash });
 
-        if (!institutionAddress) {
-            setStatusMessage("Por favor, insira o endereço da instituição.");
-            return;
-        }
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>): Promise<void> => {
+    e.preventDefault();
 
-        try {
-            writeRegisterInstitution({
-                ...wagmiContractConfig,
-                functionName: "addInstitution",
-                args: [institutionAddress as Address],
-            });
-        } catch (e: any) {
-            console.error("Erro ao registrar instituição:", e);
-            setStatusMessage(e.message || "Falha ao enviar transação de registro.");
-        }
-    };
+    showSnackbar("Iniciando registro da instituição...", "info");
 
-    const displayError = registerInstitutionError || registerInstitutionConfirmError;
-    const overallPending = isRegisteringInstitution || isConfirmingRegistration;
+    if (!institutionAddress) {
+      showSnackbar("Por favor, insira o endereço da instituição.", "error");
+      return;
+    }
 
-    return (
-        <div className="add-institution-container" style={{ marginTop: '1.5rem', border: '1px solid #007bff', padding: '1rem', borderRadius: '4px' }}>
-            <h2>Registrar Endereço da Instituição</h2>
-            <form onSubmit={handleSubmit} className="form space-y-3">
-                <input
-                    type="text"
-                    name="institutionAddress"
-                    placeholder="Endereço da Instituição (0x...)"
-                    value={institutionAddress}
-                    onChange={(e) => setInstitutionAddress(e.target.value)}
-                    required
-                    disabled={overallPending}
-                    className="w-full p-2 border rounded"
-                />
-                
-                <button
-                    disabled={overallPending}
-                    type="submit"
-                    style={{ padding: '0.5rem 1rem', backgroundColor: '#007bff', color: 'white', borderRadius: '4px', opacity: overallPending ? 0.6 : 1, marginTop: '10px' }}
-                >
-                    {overallPending
-                        ? "Registrando..."
-                        : "Registrar Endereço da Instituição"}
-                </button>
-            </form>
+    try {
+      writeRegisterInstitution({
+        ...wagmiContractConfig,
+        functionName: "addInstitution",
+        args: [institutionAddress as Address],
+      });
+    } catch (e: any) {
+      console.error("Erro ao registrar instituição:", e);
+      showSnackbar("Erro ao registrar instituição", "error");
+    }
+  };
 
-            {statusMessage && (
-                <p className="status-message text-red-500" style={{ marginTop: '0.8rem', fontWeight: 'bold' }}>
-                    {statusMessage}
-                </p>
-            )}
+  const overallPending = isRegisteringInstitution || isConfirmingRegistration;
 
-            {registerInstitutionHash && (
-                <p className="transaction-hash" style={{ marginTop: '0.8rem' }}>
-                    Hash da Transação: <a href={`https://sepolia.etherscan.io/tx/${registerInstitutionHash}`} target="_blank" rel="noopener noreferrer">{registerInstitutionHash}</a>
-                </p>
-            )}
+  useEffect(() => {
+    if (isInstitutionRegistered) {
+      showSnackbar("Instituição registrada com sucesso!", "success");
+    }
+  }, [isInstitutionRegistered, showSnackbar]);
 
-            {isConfirmingRegistration && (
-                <p className="status-message" style={{ marginTop: '0.8rem', color: 'orange' }}>
-                    Aguardando confirmação da transação...
-                </p>
-            )}
+  useEffect(() => {
+    const error = registerInstitutionError || registerInstitutionConfirmError;
 
-            {isInstitutionRegistered && (
-                <p className="status-message text-green-700" style={{ marginTop: '0.8rem', fontWeight: 'bold' }}>
-                    Instituição registrada com sucesso! Agora a instituição pode atualizar seu perfil.
-                </p>
-            )}
+    if (error) {
+      console.error("Erro ao registrar instituição:", error);
 
-            {displayError && (
-                <p className="error-message text-red-500" style={{ marginTop: '0.8rem', fontWeight: 'bold' }}>
-                    Erro: {(displayError as BaseError).shortMessage || displayError.message}
-                </p>
-            )}
-        </div>
-    );
+      const errorMessage = error.message || error.toString();
+
+      if (errorMessage.includes("InvalidAddressError") || errorMessage.includes("checksum")) {
+        showSnackbar("Endereço da carteira inválido ou com formato incorreto.", "error");
+      } else {
+        showSnackbar("Erro ao registrar instituição. Tente novamente.", "error");
+      }
+
+      return;
+    }
+  }, [registerInstitutionError, registerInstitutionConfirmError, showSnackbar]);
+
+  return (
+    <Card>
+      <Stack gap={4}>
+        <Stack>
+          <Typography variant="h4" component="h1">Registrar Endereço da Instituição</Typography>
+          <Typography variant="body1" component="p" className="info-text">
+            Como Owner, você pode registrar o endereço de uma nova instituição. A instituição precisará
+            atualizar seu perfil e gerar suas próprias chaves em um componente separado.
+          </Typography>
+        </Stack>
+        <form onSubmit={handleSubmit}>
+          <Stack gap={2} flexDirection="row">
+            <TextField
+              label="Endereço da Instituição (0x...)"
+              variant="outlined"
+              required
+              value={institutionAddress}
+              onChange={(e) => setInstitutionAddress(e.target.value)}
+              disabled={overallPending}
+              size="small"
+              className={styles["institution-address-input"]}
+            />
+            <Button
+              disabled={overallPending}
+              type="submit"
+              variant="contained"
+              className={`${styles["register-button"]} register-button`}
+            >
+              Registrar
+            </Button>
+          </Stack>
+        </form>
+      </Stack>
+      <Stack>
+        {registerInstitutionHash && (<TransactionInfo hash={registerInstitutionHash} />)}
+      </Stack>
+    </Card>
+  );
 }

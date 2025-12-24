@@ -76,19 +76,45 @@ const validateMasterPassword = (password: string): PasswordValidation => {
 // ------------------------------------
 
 
-export default function AddInstitutionInfo(): JSX.Element | null {
-  // CORREÇÃO APLICADA AQUI: Renomeando 'address' para 'connectedAddress'
-  const { address: connectedAddress, isConnected } = useAccount();
-  const connectedAddressValid = isConnected && !!connectedAddress;
-  const [institutionName, setInstitutionName] = useState<string>("");
-  const [institutionDocument, setInstitutionDocument] = useState<string>("");
-  const [masterPassword, setMasterPassword] = useState<string>("");
-  const [passwordValidationErrors, setPasswordValidationErrors] = useState<PasswordValidation>({
-    length: false,
-    uppercase: false,
-    lowercase: false,
-    number: false,
-    specialChar: false,
+// export default function AddInstitutionInfo(): JSX.Element | null {
+//   // CORREÇÃO APLICADA AQUI: Renomeando 'address' para 'connectedAddress'
+//   const { address: connectedAddress, isConnected } = useAccount();
+//   const connectedAddressValid = isConnected && !!connectedAddress;
+//   const [institutionName, setInstitutionName] = useState<string>("");
+//   const [institutionDocument, setInstitutionDocument] = useState<string>("");
+//   const [masterPassword, setMasterPassword] = useState<string>("");
+//   const [passwordValidationErrors, setPasswordValidationErrors] = useState<PasswordValidation>({
+//     length: false,
+//     uppercase: false,
+//     lowercase: false,
+//     number: false,
+//     specialChar: false,
+// import { randomBytes } from "@noble/ciphers/utils.js"
+import Card from "../card/card";
+import TextField from "@mui/material/TextField";
+import Button from "@mui/material/Button";
+import Typography from "@mui/material/Typography";
+import Stack from "@mui/material/Stack";
+import styles from "./add-institution-information.module.css";
+import { useSnackbar } from "../snackbar/snackbar-context";
+import TransactionInfo from "../transaction-info/transaction-info";
+
+type InstitutionData = {
+  institutionName: string;
+  institutionDocument: string;
+  masterPassword: string;
+}
+
+
+export default function AddInstitutionInfo(): JSX.Element {
+  const { address, isConnected } = useAccount();
+
+  const { showSnackbar } = useSnackbar();
+
+  const [institutionData, setInstitutionData] = useState<InstitutionData>({
+    institutionName: "",
+    institutionDocument: "",
+    masterPassword: ""
   });
 
   const [downloadLink, setDownloadLink] = useState<string | null>(null);
@@ -172,6 +198,16 @@ export default function AddInstitutionInfo(): JSX.Element | null {
     e.preventDefault();
     setKeyGenerationError(null);
     setGeneralStatusMessage(null);
+  const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = event.target;
+    setInstitutionData((prevData) => ({
+      ...prevData,
+      [name]: value,
+    }));
+  }
+
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>): Promise<void> => {
+    e.preventDefault();
     setDownloadLink(null);
     setGeneratedPublicKey(null);
     setIsDownloadTriggered(false);
@@ -194,6 +230,7 @@ export default function AddInstitutionInfo(): JSX.Element | null {
       return;
     }
     const currentAddress = connectedAddress as Address; // Usando connectedAddress
+    showSnackbar("Gerando chaves da instituição...", "info");
 
     setIsGeneratingKeys(true);
     try {
@@ -208,7 +245,7 @@ export default function AddInstitutionInfo(): JSX.Element | null {
 
       // --- 3. Criptografia com PBKDF2 e AES ---
       const salt = CryptoJS.lib.WordArray.random(128 / 8);
-      const key = CryptoJS.PBKDF2(masterPassword, salt, {
+      const key = CryptoJS.PBKDF2(institutionData["masterPassword"], salt, {
         keySize: KDF_KEY_SIZE / 4,
         iterations: KDF_ITERATIONS,
       });
@@ -243,12 +280,12 @@ export default function AddInstitutionInfo(): JSX.Element | null {
       writeAddInstitution({
         ...wagmiContractConfig,
         functionName: "addInstitutionInformation",
-        args: [institutionName, institutionDocument],
+        args: [institutionData["institutionName"], institutionData["institutionDocument"]],
       });
 
     } catch (e: any) {
       console.error("Key generation or encryption error:", e);
-      setKeyGenerationError(e.message || "Falha ao gerar ou criptografar chaves.");
+      showSnackbar("Erro ao gerar chaves da instituição!", "error");
       setIsGeneratingKeys(false);
     }
   };
@@ -333,6 +370,34 @@ export default function AddInstitutionInfo(): JSX.Element | null {
     </li>
   );
 
+  const overallPending = isAddingInstitution || isConfirmingAddInstitution || isAddingPublicKey || isConfirmingAddPublicKey || isGeneratingKeys;
+  const overallSuccess = isInstitutionAdded && isPublicKeyAdded;
+
+  useEffect(() => {
+    if (isInstitutionAdded) {
+      showSnackbar("Instituição adicionada com sucesso!", "success");
+    }
+  }, [isInstitutionAdded, showSnackbar]);
+
+  useEffect(() => {
+    if (isPublicKeyAdded) {
+      showSnackbar("Chave pública registrada com sucesso!", "success");
+    }
+  }, [isPublicKeyAdded, showSnackbar]);
+
+  useEffect(() => {
+    const error = addInstitutionError || addInstitutionConfirmError;
+    if (error) {
+      showSnackbar("Erro ao adicionar instituição!", "error");
+    }
+  }, [addInstitutionError, addInstitutionConfirmError, showSnackbar]);
+
+  useEffect(() => {
+    const error = addPublicKeyError || addPublicKeyConfirmError;
+    if (error) {
+      showSnackbar("Erro ao gerar chave pública!", "error");
+    }
+  }, [addPublicKeyError, addPublicKeyConfirmError, showSnackbar]);
 
   return (
     <div className="p-4 border rounded-lg shadow-md max-w-xl mx-auto">
@@ -406,7 +471,65 @@ export default function AddInstitutionInfo(): JSX.Element | null {
           {overallSuccess && <div className="text-green-600">✅ Registro Completo! O componente será fechado.</div>}
           {displayError && <div className="text-red-500">Error: {(displayError as BaseError).shortMessage || displayError.message || "Erro desconhecido."}</div>}
         </div>
+    <Card>
+      <Typography variant="h4" component="h4">Adicionar Instituição</Typography>
+      <form onSubmit={handleSubmit}>
+        <Stack gap={2} flexDirection="row">
+          <TextField
+            label="Nome da Instituição"
+            variant="outlined"
+            required
+            name="institutionName"
+            value={institutionData["institutionName"]}
+            onChange={handleChange}
+            className={styles["add-institution-input"]}
+            size="small"
+          />
+          <TextField
+            label="Documento da Instituição"
+            variant="outlined"
+            required
+            value={institutionData["institutionDocument"]}
+            name="institutionDocument"
+            onChange={handleChange}
+            className={styles["add-institution-input"]}
+            size="small"
+          />
+          <TextField
+            label="Senha"
+            variant="outlined"
+            required
+            value={institutionData["masterPassword"]}
+            name="masterPassword"
+            onChange={handleChange}
+            className={styles["add-institution-input"]}
+            type="password"
+            size="small"
+          />
+          <Button
+            type="submit"
+            variant="contained"
+            disabled={overallPending}
+            className={`${styles["add-institution-button"]} register-button`}
+          >
+             Adicionar Instituição & Gerar Chaves
+          </Button>
+        </Stack>
       </form>
-    </div>
+
+      {addInstitutionHash && (<TransactionInfo label="Institution Transaction Hash:" hash={addInstitutionHash} />)}
+
+      {addPublicKeyHash && (<TransactionInfo label="Public Key Transaction Hash:" hash={addPublicKeyHash} />)}
+
+      {downloadLink && overallSuccess && (
+        <Stack gap={2}>
+          <p className="info-text">Importante: Baixe seu Arquivo de Chave Privada Criptografada!</p>
+          <p className="info-text">Este arquivo, junto com sua Senha Mestra, é essencial para descriptografar seus dados acadêmicos. Mantenha-o seguro!</p>
+          <a href={downloadLink} download={`${address}_encrypted_private_key.json`} className="download-button">
+            Download Chave Privada Criptografada (JSON)
+          </a>
+        </Stack>
+      )}
+    </Card>
   );
 }
