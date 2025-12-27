@@ -15,17 +15,20 @@ import { AddGlobalBatchDisciplines } from '../discipline/add-batch-discipline'
 
 const IntitutionWrapper = () => {
   return (
-    <Stack>
+    <Stack gap={4} mb={4}>
       <AddInstitutionInfo />
-      <AddBatchStudents />
-      {/* <AddStudent /> */}
+      <Stack 
+        direction="row" 
+        gap={2} 
+        flexWrap="wrap" 
+        justifyContent="space-between"
+      >
+        <AddBatchStudents />
+        <AddBatchCourses />
+        <AddGlobalBatchDisciplines />
+        <AddBatchGrade />
+      </Stack>
       <GetStudent />
-      <AddBatchCourses />
-      {/* <AddCourse /> */}
-      <AddGlobalBatchDisciplines />
-      {/* <AddDiscipline /> */}
-      <ViewInstitutionCourses />
-      <AddBatchGrade />
       <GetGrade />
     </Stack>
   )

@@ -5,6 +5,11 @@ import React, { useState, useEffect, useCallback } from "react";
 import { useAccount, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
 import { isAddress, Address } from "viem";
 import { wagmiContractConfig } from "@/abis/AcademicRecordStorageABI";
+import styles from "./add-student.module.css";
+import Stack from "@mui/material/Stack";
+import Typography from "@mui/material/Typography";
+import Button from "@mui/material/Button";
+import Card from "@mui/material/Card";
 
 // Estrutura de payload baseada no contrato BatchStudentPayload
 interface BatchStudentPayload {
@@ -132,42 +137,62 @@ export function AddBatchStudents() {
   const isProcessing = isPending || isConfirming || isFetchingDB;
   const isButtonDisabled = isProcessing || !isConnected || !isAddress(institutionAddress);
 
-
   return (
-    <div className="add-batch-students-container p-4 bg-white rounded-lg shadow-md border-l-4 border-blue-500">
-      <h3 className="text-xl font-bold mb-3 text-gray-700">Ingestão em Lote de Estudantes (PostgreSQL)</h3>
-      <p className="text-sm text-gray-600 mb-4">
-        Busca estudantes associados à instituição conectada no banco de dados e os registra na blockchain.
-      </p>
-
-      <form className="form space-y-3" onSubmit={handleBatchIngestion}>
-        <button
-          type="submit"
+    <Card
+      sx={{
+        flex: '1 1 200px',
+        minHeight: '220px',
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'space-between',
+        p: 3,
+        borderRadius: '12px',
+        boxShadow: '0 4px 12px rgba(0,0,0,0.05)'
+      }}
+    >
+      <Stack gap={1}>
+        <Typography variant="h6" fontSize="1.1rem" fontWeight="bold">
+          Estudantes
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ minHeight: '48px', lineHeight: 1.4 }}>
+          Sincronizar estudantes do PostgreSQL para a Blockchain.
+        </Typography>
+      </Stack>
+      <Stack gap={1} mt={2}>
+        <Button
+          variant="contained"
+          fullWidth
+          onClick={handleBatchIngestion}
           disabled={isButtonDisabled}
-          className="w-full p-2 text-white font-semibold rounded transition duration-150"
-          style={{ backgroundColor: isButtonDisabled ? '#90CAF9' : '#1976D2' }}
+          sx={{
+            textTransform: 'none',
+            fontWeight: 'bold',
+            borderRadius: '8px',
+            py: 1,
+          }}
+          className={`${styles["register-button"]} register-button`}
         >
-          {isFetchingDB ? "Buscando Estudantes do DB..." : isProcessing ? "Processando Lote..." : "Adicionar Lote de Estudantes"}
-        </button>
-      </form>
+          {isFetchingDB ? "BUSCANDO..." : isProcessing ? "PROCESSANDO..." : "EXECUTAR LOTE"}
+        </Button>
+        <Stack sx={{ minHeight: '20px' }}>
+          {internalStatusMessage && (
+            <Typography
+              variant="caption"
+              fontWeight="bold"
+              display="block"
+              color={internalStatusMessage.includes('Erro') || internalStatusMessage.includes('Falha') ? 'error.main' : 'success.main'}
+            >
+              {internalStatusMessage}
+            </Typography>
+          )}
 
-      {internalStatusMessage && (
-        <p className={`mt-3 text-sm font-semibold ${internalStatusMessage.includes('Erro') || internalStatusMessage.includes('Falha') ? 'text-red-500' : 'text-green-700'}`}>
-          {internalStatusMessage}
-        </p>
-      )}
-
-      {studentBatch.length > 0 && !isProcessing && (
-        <p className="text-xs text-gray-600 mt-2">
-          Lote processado: {studentBatch.length} estudantes.
-        </p>
-      )}
-
-      {hash && (
-        <p className="transaction-hash text-xs mt-2 text-gray-500">
-          Hash: {hash}
-        </p>
-      )}
-    </div>
+          {hash && (
+            <Typography variant="caption" sx={{ wordBreak: 'break-all', opacity: 0.6, display: 'block' }}>
+              Hash: {hash.slice(0, 10)}...
+            </Typography>
+          )}
+        </Stack>
+      </Stack>
+    </Card>
   );
 }

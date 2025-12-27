@@ -1,26 +1,132 @@
-@import "tailwindcss";
-
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  padding: 0;
+  margin: 0;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+a {
+  text-decoration: none;
+  color: inherit;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: linear-gradient(135deg, #f8fafc, #eff6ff, #f1f5f9);
+}
+
+.container {
+  padding: 0 6rem;
+}
+
+.register-button {
+  background: linear-gradient(90deg,
+      #1e3a8a 0%,
+      #1e40af 50%,
+      #1e3a8a 100%);
+  background-size: 200% 100%;
+  background-position: 0% 50%;
+
+  transition:
+    background-position 0.5s ease-in-out,
+    box-shadow 0.2s ease,
+    transform 0.2s ease;
+
+  outline: #1e40af;
+  color: #FFF;
+}
+
+.register-button:disabled {
+  /* Altera o gradiente para tons de cinza médio */
+  background: linear-gradient(90deg, 
+      #9ca3af 0%, 
+      #d1d5db 50%, 
+      #9ca3af 100%);
+  
+  /* Remove a sombra e impede a mudança de cursor */
+  box-shadow: none;
+  cursor: not-allowed;
+  
+  /* Remove o efeito de elevação (transform) */
+  transform: none;
+  
+  /* Opacidade leve para reforçar o estado desabilitado */
+  opacity: 0.7;
+  
+  /* Garante que o contorno acompanhe a cor cinza */
+  outline: #9ca3af;
+}
+
+/* Importante: Garantir que o hover não atue quando estiver desabilitado */
+.register-button:disabled:hover {
+  background-position: 0% 50%;
+  box-shadow: none;
+  transform: none;
+}
+
+.register-button:hover {
+  background-position: 100% 50%;
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.15);
+  transform: translateY(-1px);
+  transition: background-position 0.6s ease;
+}
+
+.register-button:hover {
+  background-position: 100% 50%;
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.15);
+  transform: translateY(-1px);
+  transition: background-position 0.6s ease;
+}
+
+.download-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  cursor: pointer;
+
+  text-transform: uppercase;
+  font-weight: 500;
+
+  padding: 12px 24px;
+  border-radius: 4px;
+
+  background: linear-gradient(90deg,
+    #16a34a 0%,
+    #22c55e 50%,
+    #16a34a 100%);
+  background-size: 200% 100%;
+  background-position: 0% 50%;
+
+  box-shadow: 0px 3px 1px -2px rgba(0,0,0,0.2),0px 2px 2px 0px rgba(0,0,0,0.14),0px 1px 5px 0px rgba(0,0,0,0.12);
+
+  color: #fff !important;
+  text-decoration: none;
+  border: none;
+
+  transition:
+    background-position 0.45s ease-in-out,
+    box-shadow 0.2s ease,
+    transform 0.2s ease;
+}
+
+.download-button:hover {
+  background-position: 100% 50%;
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.15);
+  transform: translateY(-1px);
+  transition: background-position 0.6s ease;
+}
+
+.download-button:focus-visible {
+  outline: 2px solid #22c55e;
+  outline-offset: 3px;
+}
+
+.MuiInputLabel-root.Mui-focused {
+  color: #1e40af !important;
+}
+
+.info-text {
+  font-size: 0.9rem;
+  color: #707070;
 }
