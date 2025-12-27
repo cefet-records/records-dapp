@@ -176,55 +176,54 @@ export default function AddInstitutionInfo(): JSX.Element | null {
 
   return (
     <Card>
-      <Typography variant="h4" mb={2}>Registrar Instituição</Typography>
+      <Typography variant="h5" fontWeight="bold" mb={2}>Registrar informações da sua instituição</Typography>
       <form onSubmit={handleSubmit}>
         <Stack gap={3}>
           <Stack direction={{ xs: 'column', sm: 'row' }} gap={2}>
-            <TextField 
-                label="Nome da Instituição" 
-                fullWidth 
-                value={institutionName} 
-                onChange={(e) => setInstitutionName(e.target.value)} 
-                required 
+            <TextField
+              label="Nome da Instituição"
+              fullWidth
+              value={institutionName}
+              onChange={(e) => setInstitutionName(e.target.value)}
+              required
             />
-            <TextField 
-                label="CNPJ / Documento" 
-                fullWidth 
-                value={institutionDocument} 
-                onChange={(e) => setInstitutionDocument(e.target.value)} 
-                required 
+            <TextField
+              label="CNPJ / Documento"
+              fullWidth
+              value={institutionDocument}
+              onChange={(e) => setInstitutionDocument(e.target.value)}
+              required
             />
           </Stack>
 
-          <TextField 
-            label="Senha Mestra de Criptografia" 
-            type="password" 
-            fullWidth 
-            value={masterPassword} 
-            onChange={(e) => setMasterPassword(e.target.value)} 
-            required 
+          <TextField
+            label="Senha Mestra de Criptografia"
+            type="password"
+            fullWidth
+            value={masterPassword}
+            onChange={(e) => setMasterPassword(e.target.value)}
+            required
             helperText="Esta senha cifra sua chave privada. NÃO A PERCA."
           />
-
-          {/* LISTA DE VALIDAÇÃO VISUAL */}
           <Stack sx={{ p: 2, bgcolor: '#fafafa', borderRadius: 1, border: '1px solid #eee' }}>
             <Typography variant="caption" fontWeight="bold" mb={1}>Requisitos da Senha:</Typography>
             <Typography variant="caption" color={passwordValidation.length ? "success.main" : "error.main"}>
-                {passwordValidation.length ? "✅" : "❌"} Mínimo 12 caracteres
+              {passwordValidation.length ? "✅" : "❌"} Mínimo 12 caracteres
             </Typography>
             <Typography variant="caption" color={passwordValidation.uppercase && passwordValidation.lowercase ? "success.main" : "error.main"}>
-                {passwordValidation.uppercase && passwordValidation.lowercase ? "✅" : "❌"} Letras maiúsculas e minúsculas
+              {passwordValidation.uppercase && passwordValidation.lowercase ? "✅" : "❌"} Letras maiúsculas e minúsculas
             </Typography>
             <Typography variant="caption" color={passwordValidation.number && passwordValidation.specialChar ? "success.main" : "error.main"}>
-                {passwordValidation.number && passwordValidation.specialChar ? "✅" : "❌"} Números e caracteres especiais
+              {passwordValidation.number && passwordValidation.specialChar ? "✅" : "❌"} Números e caracteres especiais
             </Typography>
           </Stack>
 
-          <Button 
-            type="submit" 
-            variant="contained" 
+          <Button
+            type="submit"
+            variant="contained"
             size="large"
             disabled={overallPending || !isPasswordValid}
+            className={`${styles["register-button"]} register-button`}
           >
             {overallPending ? "Processando Registro..." : "Registrar e Gerar Chaves"}
           </Button>

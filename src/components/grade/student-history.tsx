@@ -1,8 +1,8 @@
+import React from "react";
 import Typography from '@mui/material/Typography';
 import { GradeItem } from './get-grade';
 import styles from './student-history.module.css'
 import Stack from '@mui/material/Stack';
-// import { CheckCircle } from 'lucide-react'
 
 type StudentHistoryProps = {
   institutionInfo: any | null;
@@ -31,22 +31,22 @@ export function StudentHistory({ institutionInfo, studentInfo, queryStudentAddre
         <div className={styles.studentInfo}>
           <div>
             <p className={styles.label}>Universidade</p>
-            <p className={styles.value}>{institutionInfo.institutionName}</p>
+            <p className={styles.value}>{institutionInfo?.institutionName}</p>
           </div>
 
           <div>
             <p className={styles.label}>Curso</p>
-            <p className={styles.value}>{`${institutionInfo.courseCode} - ${institutionInfo.courseName}`}</p>
+            <p className={styles.value}>{`${institutionInfo?.courseCode || ''} - ${institutionInfo?.courseName || ''}`}</p>
           </div>
 
           <div>
             <p className={styles.label}>Nome do Estudante</p>
-            <p className={styles.value}>{studentInfo.name}</p>
+            <p className={styles.value}>{studentInfo?.name}</p>
           </div>
 
           <div>
             <p className={styles.label}>Documento do Estudante</p>
-            <p className={styles.value}>{studentInfo.document}</p>
+            <p className={styles.value}>{studentInfo?.document}</p>
           </div>
 
           <div>
@@ -56,12 +56,7 @@ export function StudentHistory({ institutionInfo, studentInfo, queryStudentAddre
 
           <div>
             <p className={styles.label}>Hash do Estudante (Blockchain)</p>
-            <p className={styles.value}>{studentInfo.hash}</p>
-          </div>
-
-          <div>
-            <p className={styles.label}>Hash do Estudante (calculado)</p>
-            <p className={styles.value}>{studentInfo.calculatedHash}</p>
+            <p className={styles.value}>{studentInfo?.publicHash}</p>
           </div>
         </div>
 
@@ -82,7 +77,8 @@ export function StudentHistory({ institutionInfo, studentInfo, queryStudentAddre
             <tbody className={styles.tbody}>
               {Object.entries(groupGradesBySemester(queriedStudentGrades)).map(
                 ([semester, grades]: [string, GradeItem[]]) => (
-                  <>
+                  // ✅ CORREÇÃO: Usando React.Fragment com key em vez de <>
+                  <React.Fragment key={`semester-group-${semester}`}>
                     <tr>
                       <td colSpan={7} className={`${styles.td} ${styles.semesterRow}`}>
                         Semestre: {semester}
@@ -109,7 +105,7 @@ export function StudentHistory({ institutionInfo, studentInfo, queryStudentAddre
                         </td>
                       </tr>
                     ))}
-                  </>
+                  </React.Fragment>
                 )
               )}
             </tbody>

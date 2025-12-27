@@ -5,6 +5,7 @@ import { useAccount, usePublicClient, useReadContract, useWriteContract } from "
 import { isAddress, Address, Hex } from "viem";
 import { wagmiContractConfig } from "../../abis/AcademicRecordStorageABI";
 import { encryptECIES, decryptECIES } from '../../utils/cripto.utils';
+import styles from "./add-student.module.css";
 import CryptoJS from "crypto-js";
 
 // Componentes de UI
@@ -189,7 +190,7 @@ export function AllowAccessToAddress(): JSX.Element {
   return (
     <Card>
       <Stack gap={3}>
-        <Typography variant="h5" fontWeight="bold">Conceder Acesso a Terceiros</Typography>
+        <Typography variant="h5" fontWeight="bold">Conceder acesso a terceiros</Typography>
         
         <TextField
           label="Endereço do Visitante (0x...)"
@@ -202,21 +203,7 @@ export function AllowAccessToAddress(): JSX.Element {
 
         {/* DETECÇÃO DE BACKUP */}
         {isFromLocalStorage && encryptedBackupData ? (
-          <Stack sx={{ p: 2, bgcolor: 'rgba(25, 118, 210, 0.08)', borderRadius: 2, border: '1px solid #1976d2' }}>
-            <Typography variant="body2" color="primary" fontWeight="bold">
-              ✅ Backup de {detectedRole} detectado no navegador
-            </Typography>
-            <Button 
-              size="small" 
-              sx={{ alignSelf: 'flex-start', mt: 1, textTransform: 'none' }} 
-              onClick={() => {
-                setEncryptedBackupData(null);
-                setIsFromLocalStorage(false);
-              }}
-            >
-              Usar outro arquivo
-            </Button>
-          </Stack>
+          <></>
         ) : (
           <UploadCard 
             label="Seu Arquivo de Chave Privada (.json)" 
@@ -225,7 +212,7 @@ export function AllowAccessToAddress(): JSX.Element {
         )}
 
         <TextField
-          label="Sua Senha Mestra"
+          label="Senha Mestra"
           type="password"
           fullWidth
           size="small"
@@ -238,6 +225,7 @@ export function AllowAccessToAddress(): JSX.Element {
           variant="contained"
           onClick={allowAccess}
           disabled={isDisabled}
+          className={`${styles["register-button"]} register-button`}
         >
           {isWritePending ? "Enviando Transação..." : "Conceder Acesso"}
         </Button>

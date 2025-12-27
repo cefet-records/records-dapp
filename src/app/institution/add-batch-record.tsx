@@ -5,6 +5,11 @@ import React, { useState, useEffect, useCallback } from "react";
 import { useAccount, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
 import { isAddress, Address } from "viem";
 import { wagmiContractConfig } from "@/abis/AcademicRecordStorageABI";
+import styles from "./add-batch-record.module.css";
+import Card from "@mui/material/Card";
+import Stack from "@mui/material/Stack";
+import Typography from "@mui/material/Typography";
+import Button from "@mui/material/Button";
 
 // Define a estrutura do payload esperado pela função addBatchGrades no contrato
 interface BatchGradePayload {
@@ -166,51 +171,63 @@ export function AddBatchGrade() {
   const isProcessing = isPending || isConfirming || isFetchingDB;
   const isButtonDisabled = isProcessing || !isConnected || !isAddress(institutionAddress);
 
-
   return (
-    <div className="add-batch-grade-container p-4 bg-white rounded-lg shadow-md border-l-4 border-red-500">
-      <h2>Ingestão em Lote de Notas (PostgreSQL)</h2>
-      <p className="text-sm" style={{ marginBottom: '10px', color: 'gray' }}>
-        Busca notas no banco de dados, filtra por instituição, e as envia em lote para a blockchain.
-      </p>
-
-      {(!isConnected || !isAddress(institutionAddress)) && (
-        <p style={{ color: 'red', marginBottom: '1rem' }}>⚠️ Conecte a carteira da Instituição para realizar a ingestão.</p>
-      )}
-
-      {isAddress(institutionAddress) && (
-        <p className="text-sm text-blue-700">Instituição Conectada: **{institutionAddress}**</p>
-      )}
-
-      <form className="form space-y-3" onSubmit={handleBatchIngestion}>
-        <button
-          type="submit"
+    <Card
+      sx={{
+        flex: '1 1 200px',
+        minHeight: '220px',
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'space-between',
+        p: 3,
+        borderRadius: '12px',
+        boxShadow: '0 4px 12px rgba(0,0,0,0.05)'
+      }}
+    >
+      <Stack gap={1}>
+        <Typography variant="h6" fontSize="1.1rem" fontWeight="bold">
+          Notas
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ minHeight: '48px', lineHeight: 1.4 }}>
+          Busca notas no banco de dados, filtra por instituição, e as envia em lote para a blockchain.
+        </Typography>
+      </Stack>
+      <Stack gap={1} mt={2}>
+        <Button
+          variant="contained"
+          fullWidth
+          onClick={handleBatchIngestion}
           disabled={isButtonDisabled}
-          className="w-full p-2 text-white font-semibold rounded transition duration-150"
-          style={{ backgroundColor: isButtonDisabled ? '#F44336' : '#C62828', opacity: isButtonDisabled ? 0.6 : 1, marginTop: '10px' }}
+          sx={{
+            textTransform: 'none',
+            fontWeight: 'bold',
+            borderRadius: '8px',
+            py: 1,
+            backgroundColor: '#1e3a8a'
+          }}
+          className={`${styles["register-button"]} register-button`}
         >
-          {isFetchingDB ? "Buscando Notas do DB..." : isProcessing ? "Processando Lote..." : "Enviar Lote de Notas"}
-        </button>
-      </form>
+          {isFetchingDB ? "BUSCANDO..." : isProcessing ? "PROCESSANDO..." : "EXECUTAR LOTE"}
+        </Button>
+        <Stack sx={{ minHeight: '20px' }}>
+          {internalStatusMessage && (
+            <Typography
+              variant="caption"
+              fontWeight="bold"
+              display="block"
+              color={internalStatusMessage.includes('Erro') || internalStatusMessage.includes('Falha') ? 'error.main' : 'success.main'}
+            >
+              {internalStatusMessage}
+            </Typography>
+          )}
 
-      {internalStatusMessage && (
-        <p className={`status-message ${internalStatusMessage.includes('Erro') || internalStatusMessage.includes('Falha') ? 'text-red-500' : 'text-green-700'}`}
-          style={{ marginTop: '0.8rem', fontWeight: 'bold' }}>
-          {internalStatusMessage}
-        </p>
-      )}
-
-      {gradesBatch.length > 0 && !isProcessing && (
-        <p className="text-xs text-gray-600 mt-2">
-          Lote processado: {gradesBatch.length} notas carregadas.
-        </p>
-      )}
-
-      {hash && (
-        <p className="transaction-hash text-sm" style={{ marginTop: '0.8rem' }}>
-          Hash da Transação: {hash}
-        </p>
-      )}
-    </div>
+          {hash && (
+            <Typography variant="caption" sx={{ wordBreak: 'break-all', opacity: 0.6, display: 'block' }}>
+              Hash: {hash.slice(0, 10)}...
+            </Typography>
+          )}
+        </Stack>
+      </Stack>
+    </Card>
   );
 }

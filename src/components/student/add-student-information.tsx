@@ -18,6 +18,7 @@ import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 import TextField from "@mui/material/TextField";
 import Button from "@mui/material/Button";
+import styles from "./add-student.module.css";
 import { useSnackbar } from "../snackbar/snackbar-context";
 import TransactionInfo from "../transaction-info/transaction-info";
 
@@ -147,7 +148,7 @@ export function AddStudentInformation(): JSX.Element | null {
       // Preparação de Dados Cifrados (ECIES)
       const personalInfo = JSON.stringify({ name, document: studentDocument, salt: bytesToHex(randomBytes(16)) });
       const publicHash = keccak256(toBytes(personalInfo)) as Hex;
-      
+
       const instPK = (institutionData as InstitutionContractData)?.publicKey;
       if (!instPK || instPK === '0x') throw new Error("Instituição sem chave pública.");
 
@@ -182,34 +183,54 @@ export function AddStudentInformation(): JSX.Element | null {
   return (
     <Card>
       <Stack gap={3}>
-        <Typography variant="h4" fontWeight="bold">Adicionar Informação Pessoal do Estudante</Typography>
+        <Typography variant="h5" fontWeight="bold">Adicionar informação pessoal do estudante</Typography>
         <Typography variant="body2" color="text.secondary">
           Seus dados serão cifrados localmente antes do envio. Você precisará do backup gerado e da sua senha mestra para acessá-los futuramente.
         </Typography>
 
         <form onSubmit={handleGenerateKeysAndAddInfo}>
           <Stack gap={2}>
-            <TextField
-              label="Endereço da Instituição"
-              fullWidth
-              size="small"
-              value={institutionAddress}
-              onChange={(e) => setInstitutionAddress(e.target.value as Address)}
-              error={isInstInvalid}
-              helperText={isInstInvalid ? "Esta instituição não possui chave pública registrada." : ""}
-            />
-            <TextField label="Nome Completo" fullWidth size="small" value={name} onChange={(e) => setName(e.target.value)} required />
-            <TextField label="Documento" fullWidth size="small" value={studentDocument} onChange={(e) => setStudentDocument(e.target.value)} required />
-            
-            <TextField
-              label="Senha Mestra"
-              type="password"
-              fullWidth
-              size="small"
-              value={masterPassword}
-              onChange={(e) => setMasterPassword(e.target.value)}
-              required
-            />
+            {/* PRIMEIRA LINHA: Instituição e Nome */}
+            <Stack direction={{ xs: 'column', sm: 'row' }} gap={2}>
+              <TextField
+                label="Endereço da Instituição"
+                fullWidth
+                size="small"
+                value={institutionAddress}
+                onChange={(e) => setInstitutionAddress(e.target.value as Address)}
+                error={isInstInvalid}
+                helperText={isInstInvalid ? "Esta instituição não possui chave pública registrada." : ""}
+              />
+              <TextField
+                label="Nome Completo"
+                fullWidth
+                size="small"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                required
+              />
+            </Stack>
+
+            {/* SEGUNDA LINHA: Documento e Senha Mestra */}
+            <Stack direction={{ xs: 'column', sm: 'row' }} gap={2}>
+              <TextField
+                label="Documento"
+                fullWidth
+                size="small"
+                value={studentDocument}
+                onChange={(e) => setStudentDocument(e.target.value)}
+                required
+              />
+              <TextField
+                label="Senha Mestra"
+                type="password"
+                fullWidth
+                size="small"
+                value={masterPassword}
+                onChange={(e) => setMasterPassword(e.target.value)}
+                required
+              />
+            </Stack>
 
             {/* VALIDADOR DE SENHA */}
             <Stack sx={{ p: 1.5, bgcolor: '#f9f9f9', borderRadius: 1, border: '1px solid #ddd' }}>
@@ -224,11 +245,12 @@ export function AddStudentInformation(): JSX.Element | null {
               </Typography>
             </Stack>
 
-            <Button 
-              type="submit" 
-              variant="contained" 
+            <Button
+              type="submit"
+              variant="contained"
               size="large"
               disabled={isSubmitDisabled}
+              className={`${styles["register-button"]} register-button`}
             >
               {isGeneratingKeys || isTxPending ? "Processando..." : "Gerar Chaves e Registrar"}
             </Button>

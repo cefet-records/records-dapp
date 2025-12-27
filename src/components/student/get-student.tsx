@@ -17,6 +17,7 @@ import FormControl from "@mui/material/FormControl";
 import RadioGroup from "@mui/material/RadioGroup";
 import FormControlLabel from "@mui/material/FormControlLabel";
 import Radio from "@mui/material/Radio";
+import styles from "./get-student.module.css";
 import TransactionInfo from "../transaction-info/transaction-info";
 import { useSnackbar } from "../snackbar/snackbar-context";
 
@@ -180,8 +181,8 @@ export function GetStudent(): JSX.Element {
   return (
     <Card>
       <Stack gap={3}>
-        <Typography variant="h5" fontWeight="bold">Visualizar Dados do Estudante</Typography>
-        
+        <Typography variant="h5" fontWeight="bold">Visualizar dados do estudante</Typography>
+
         <TextField
           label="Endereço do Estudante (0x...)"
           fullWidth
@@ -192,52 +193,52 @@ export function GetStudent(): JSX.Element {
 
         {/* LÓGICA DE EXIBIÇÃO CONDICIONAL DO UPLOAD */}
         {isFromLocalStorage && encryptedBackupData ? (
-          <Stack sx={{ p: 2, bgcolor: 'rgba(25, 118, 210, 0.08)', borderRadius: 2, border: '1px solid #1976d2' }}>
-            <Typography variant="body2" color="primary" fontWeight="bold">
-              ✅ Chave de {detectedRoleName} detectada no navegador
-            </Typography>
-            <Typography variant="caption" color="textSecondary">
-              Endereço: {connectedAddress?.slice(0,6)}...{connectedAddress?.slice(-4)}
-            </Typography>
-            <Button 
-              size="small" 
-              sx={{ mt: 1, alignSelf: 'flex-start', fontSize: '0.7rem' }} 
-              onClick={() => {
-                setEncryptedBackupData(null);
-                setIsFromLocalStorage(false);
-              }}
-            >
-              Trocar arquivo de backup
-            </Button>
-          </Stack>
+          <></>
         ) : (
-          <UploadCard 
-            label="Upload do Backup da Chave Privada (.json)" 
-            handleFileChange={handleFileChange} 
+          <UploadCard
+            label="Upload do Backup da Chave Privada (.json)"
+            handleFileChange={handleFileChange}
           />
         )}
 
-        <TextField
-          label="Senha Mestra"
-          type="password"
-          fullWidth
-          size="small"
-          value={masterPasswordDecrypt}
-          onChange={(e) => setMasterPasswordDecrypt(e.target.value)}
-          disabled={!encryptedBackupData}
-        />
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems="center">
+          {/* Campo de Senha Mestra */}
+          <TextField
+            label="Senha Mestra"
+            type="password"
+            fullWidth
+            size="small"
+            value={masterPasswordDecrypt}
+            onChange={(e) => setMasterPasswordDecrypt(e.target.value)}
+            disabled={!encryptedBackupData}
+          />
 
-        <FormControl disabled={isLoadingDecryption}>
-          <RadioGroup row value={targetAudience} onChange={(e) => setTargetAudience(e.target.value as any)}>
-            <FormControlLabel value="self" control={<Radio />} label="Visão Aluno" />
-            <FormControlLabel value="institution" control={<Radio />} label="Visão Instituição" />
-          </RadioGroup>
-        </FormControl>
-
+          {/* Seleção de Visão */}
+          <FormControl disabled={isLoadingDecryption} sx={{ minWidth: 'fit-content' }}>
+            <RadioGroup
+              row
+              value={targetAudience}
+              onChange={(e) => setTargetAudience(e.target.value as any)}
+              sx={{ flexWrap: 'nowrap' }} // Garante que o rádio não quebre linha internamente
+            >
+              <FormControlLabel
+                value="self"
+                control={<Radio size="small" />}
+                label={<Typography variant="body2">Visão Aluno</Typography>}
+              />
+              <FormControlLabel
+                value="institution"
+                control={<Radio size="small" />}
+                label={<Typography variant="body2">Visão Instituição</Typography>}
+              />
+            </RadioGroup>
+          </FormControl>
+        </Stack>
         <Button
           variant="contained"
           onClick={handleGetAndDecrypt}
           disabled={isLoadingDecryption || !studentAddressValid || !encryptedBackupData || masterPasswordDecrypt.length < 12}
+          className={`${styles["register-button"]} register-button`}
         >
           {isLoadingDecryption ? "Processando..." : "Descriptografar Dados"}
         </Button>

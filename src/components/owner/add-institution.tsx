@@ -1,9 +1,5 @@
 import { FormEvent, JSX, useEffect, useState } from "react";
-import {
-  type BaseError,
-  useWriteContract,
-  useWaitForTransactionReceipt
-} from "wagmi";
+import { useWriteContract, useWaitForTransactionReceipt } from "wagmi";
 import { Address } from "viem";
 import { wagmiContractConfig } from "@/abis/AcademicRecordStorageABI";
 import Card from "../card/card";
@@ -18,7 +14,6 @@ import TransactionInfo from "../transaction-info/transaction-info";
 
 export default function AddInstitution(): JSX.Element {
   const [institutionAddress, setInstitutionAddress] = useState<string>("");
-
   const { showSnackbar } = useSnackbar();
 
   const {
@@ -36,14 +31,11 @@ export default function AddInstitution(): JSX.Element {
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>): Promise<void> => {
     e.preventDefault();
-
     showSnackbar("Iniciando registro da instituição...", "info");
-
     if (!institutionAddress) {
       showSnackbar("Por favor, insira o endereço da instituição.", "error");
       return;
     }
-
     try {
       writeRegisterInstitution({
         ...wagmiContractConfig,
@@ -66,18 +58,14 @@ export default function AddInstitution(): JSX.Element {
 
   useEffect(() => {
     const error = registerInstitutionError || registerInstitutionConfirmError;
-
     if (error) {
       console.error("Erro ao registrar instituição:", error);
-
       const errorMessage = error.message || error.toString();
-
       if (errorMessage.includes("InvalidAddressError") || errorMessage.includes("checksum")) {
         showSnackbar("Endereço da carteira inválido ou com formato incorreto.", "error");
       } else {
         showSnackbar("Erro ao registrar instituição. Tente novamente.", "error");
       }
-
       return;
     }
   }, [registerInstitutionError, registerInstitutionConfirmError, showSnackbar]);
@@ -86,7 +74,7 @@ export default function AddInstitution(): JSX.Element {
     <Card>
       <Stack gap={4}>
         <Stack>
-          <Typography variant="h4" component="h1">Registrar Endereço da Instituição</Typography>
+          <Typography variant="h5" fontWeight="bold">Registrar endereço da instituição</Typography>
           <Typography variant="body1" component="p" className="info-text">
             Como Owner, você pode registrar o endereço de uma nova instituição. A instituição precisará
             atualizar seu perfil e gerar suas próprias chaves em um componente separado.

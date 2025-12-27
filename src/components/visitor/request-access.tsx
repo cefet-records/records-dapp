@@ -7,6 +7,7 @@ import { wagmiContractConfig } from "../../abis/AcademicRecordStorageABI";
 import { useIsClient } from "../../app/is-client";
 
 import * as secp from "@noble/secp256k1";
+import styles from "./request-access.module.css";
 import { bytesToHex } from "viem";
 import CryptoJS from "crypto-js";
 import Card from "../card/card";
@@ -272,7 +273,7 @@ export function RequestAccess() {
   return (
     <Card>
       <Stack>
-        <Typography variant="h4" component="h4">Solicitar Acesso à Informação do Estudante (como Visitante)</Typography>
+        <Typography variant="h5" component="h4" fontWeight="bold">Solicitar acesso à informação do estudante</Typography>
         <Typography variant="body1" component="p" className="info-text">
           Gere um novo par de chaves, salve o backup da sua chave privada e, em seguida, solicite acesso aos registros de um estudante enviando sua chave pública.
           O estudante precisará aprovar sua solicitação.
@@ -300,12 +301,9 @@ export function RequestAccess() {
           />
 
           <Stack>
-            <label htmlFor="masterPasswordGenerate" style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
-              Senha Mestra para Criptografar seu Backup de Chave Privada:
-            </label>
             <TextField
               id="masterPasswordGenerate"
-              label="Mínimo 12 caracteres"
+              label="Senha Mestra"
               type="password"
               variant="outlined"
               required
@@ -326,46 +324,26 @@ export function RequestAccess() {
             type="button"
             onClick={generateAndEncryptKey}
             disabled={isGenerateKeyDisabled}
-            className="register-button"
+            className={`${styles["register-button"]} register-button`}
+            sx={{ color: '#FFF' }}
           >
             {isPending ? "Processando..." : (generatedPublicKey ? "Gerar Nova Chave" : "Gerar Par de Chaves e Backup")}
           </Button>
 
           {generatedPublicKey && (
             <Stack>
-              <TransactionInfo label="Sua Chave Pública de Criptografia:" hash={generatedPublicKey} />
-              <p className="info-text">
-                Nova chave pública gerada. Esta chave será usada para sua solicitação de acesso.
-              </p>
+              <TransactionInfo label="Hash da Transação:" hash={generatedPublicKey} />
             </Stack>
           )}
-
-          {backupFileContent && (
-            <Stack gap={1}>
-              <Button
-                type="button"
-                onClick={handleDownloadBackup}
-                className="download-button"
-                disabled={isPending}
-              >
-                Baixar Backup da Chave Privada (.json)
-              </Button>
-              <p className="info-text">
-                <span style={{ fontWeight: 'bold' }}>ATENÇÃO: </span>Salve este arquivo em um local seguro. Ele contém sua chave privada criptografada.
-                Sem ele e sua senha mestra, você não poderá descriptografar os dados do estudante!
-              </p>
-            </Stack>
-          )}
-
           <Button
             type="button"
             onClick={requestAccess}
             disabled={isRequestAccessDisabled}
-            className="register-button"
+            className={`${styles["register-button"]} register-button`}
+            sx={{ color: '#FFF' }}
           >
             {isPending ? "Solicitando..." : "Solicitar Acesso ao Estudante"}
           </Button>
-
         </Stack>
       </form>
     </Card>

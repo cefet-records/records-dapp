@@ -36,6 +36,34 @@ body {
   color: #FFF;
 }
 
+.register-button:disabled {
+  /* Altera o gradiente para tons de cinza médio */
+  background: linear-gradient(90deg, 
+      #9ca3af 0%, 
+      #d1d5db 50%, 
+      #9ca3af 100%);
+  
+  /* Remove a sombra e impede a mudança de cursor */
+  box-shadow: none;
+  cursor: not-allowed;
+  
+  /* Remove o efeito de elevação (transform) */
+  transform: none;
+  
+  /* Opacidade leve para reforçar o estado desabilitado */
+  opacity: 0.7;
+  
+  /* Garante que o contorno acompanhe a cor cinza */
+  outline: #9ca3af;
+}
+
+/* Importante: Garantir que o hover não atue quando estiver desabilitado */
+.register-button:disabled:hover {
+  background-position: 0% 50%;
+  box-shadow: none;
+  transform: none;
+}
+
 .register-button:hover {
   background-position: 100% 50%;
   box-shadow: 0 10px 20px rgba(0, 0, 0, 0.15);

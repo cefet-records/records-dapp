@@ -17,12 +17,18 @@ const IntitutionWrapper = () => {
   return (
     <Stack gap={4} mb={4}>
       <AddInstitutionInfo />
-      <AddBatchStudents />
-      <AddBatchCourses />
-      <AddGlobalBatchDisciplines />
-      <AddBatchGrade />
+      <Stack 
+        direction="row" 
+        gap={2} 
+        flexWrap="wrap" 
+        justifyContent="space-between"
+      >
+        <AddBatchStudents />
+        <AddBatchCourses />
+        <AddGlobalBatchDisciplines />
+        <AddBatchGrade />
+      </Stack>
       <GetStudent />
-      {/* <ViewInstitutionCourses /> */}
       <GetGrade />
     </Stack>
   )

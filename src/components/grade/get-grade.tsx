@@ -7,8 +7,8 @@ import { isAddress, Address, Hex } from "viem";
 import { wagmiContractConfig } from "../../abis/AcademicRecordStorageABI";
 import { useIsClient } from "../../app/is-client";
 import { decryptECIES } from '../../utils/cripto.utils';
-import * as CryptoJS from "crypto-js";
-
+import CryptoJS from "crypto-js";
+import styles from "./get-grade.module.css";
 import Card from "../card/card";
 import Typography from "@mui/material/Typography";
 import TextField from "@mui/material/TextField";
@@ -40,7 +40,7 @@ interface BackupFileContent {
   iv: string;
 }
 
-interface GradeItem {
+export interface GradeItem {
   disciplineCode: string;
   disciplineName: string;
   workload: number;
@@ -112,7 +112,7 @@ export function GetGrade() {
     if (isClient && isConnected && connectedAddress) {
       const permission = userPermission as string;
       const addr = connectedAddress.toLowerCase();
-      
+
       // Tenta detectar pelo prefixo da permissão atual primeiro
       let primaryPrefix = "";
       let primaryName = "";
@@ -187,8 +187,8 @@ export function GetGrade() {
       const { data: instData } = await refetchInstitutionData();
 
       // 3. Escolher Payload para Descriptografia
-      let payload = (userPermission === userTypes.STUDENT) 
-        ? (student as any).selfEncryptedInformation 
+      let payload = (userPermission === userTypes.STUDENT)
+        ? (student as any).selfEncryptedInformation
         : (student as any).institutionEncryptedInformation;
 
       if (userPermission === userTypes.VISITOR || userPermission === userTypes.OWNER) {
@@ -197,11 +197,16 @@ export function GetGrade() {
       }
 
       if (!payload || payload === '0x') throw new Error("Nenhum dado cifrado disponível para sua chave.");
+      
+      if (student && payload) {
+        const decryptedString = await decryptECIES(payload, decryptedPrivKey as Hex);
+        const decryptedObj = JSON.parse(decryptedString);
+        const infoWithHash = { ...decryptedObj, publicHash: student.publicHash };
+        setStudentInfo(infoWithHash);
+      } else {
+        showSnackbar("Erro: Dados do estudante não carregados corretamente.", "error");
+      }
 
-      const decryptedInfo = await decryptECIES(payload, decryptedPrivKey as Hex);
-      setStudentInfo(JSON.parse(decryptedInfo));
-
-      // 4. Formatar Notas
       const rawGrades = transcript?.[0] || [];
       const discDetails = transcript?.[1] || [];
       const formattedGrades = rawGrades.map((g: any, i: number) => ({
@@ -217,7 +222,7 @@ export function GetGrade() {
       }));
 
       setQueriedStudentGrades(formattedGrades);
-      setInstitutionInfo({ institutionName: instData?.[0]?.name });
+      setInstitutionInfo({ institutionName: instData?.[0]?.name, courseCode: instData?.[1]?.code, courseName: instData?.[1]?.name});
       showSnackbar("Histórico escolar descriptografado!", "success");
     } catch (e: any) {
       showSnackbar(e.message || "Erro ao descriptografar dados.", "error");
@@ -231,8 +236,8 @@ export function GetGrade() {
   return (
     <Card>
       <Stack spacing={3}>
-        <Typography variant="h5" fontWeight="bold">Consulta de Histórico Acadêmico</Typography>
-        
+        <Typography variant="h5" fontWeight="bold">Consulta de histórico acadêmico</Typography>
+
         <TextField
           label="Endereço do Estudante (0x...)"
           fullWidth
@@ -242,25 +247,11 @@ export function GetGrade() {
 
         {/* DETECÇÃO DE CHAVE NO NAVEGADOR */}
         {isFromLocalStorage && encryptedBackupData ? (
-          <Stack sx={{ p: 2, bgcolor: 'rgba(76, 175, 80, 0.08)', borderRadius: 2, border: '1px solid #4caf50' }}>
-            <Typography variant="body2" color="success.main" fontWeight="bold">
-              ✅ Chave de {detectedRoleName} encontrada no navegador
-            </Typography>
-            <Button 
-              size="small" 
-              sx={{ alignSelf: 'flex-start', mt: 1, textTransform: 'none' }} 
-              onClick={() => {
-                setEncryptedBackupData(null);
-                setIsFromLocalStorage(false);
-              }}
-            >
-              Usar outro arquivo de backup
-            </Button>
-          </Stack>
+          <></>
         ) : (
-          <UploadCard 
-            label="Upload do Backup da Chave Privada (.json)" 
-            handleFileChange={handleFileChange} 
+          <UploadCard
+            label="Upload do Backup da Chave Privada (.json)"
+            handleFileChange={handleFileChange}
           />
         )}
 
@@ -273,11 +264,12 @@ export function GetGrade() {
           disabled={!encryptedBackupData}
         />
 
-        <Button 
-          variant="contained" 
+        <Button
+          variant="contained"
           size="large"
           onClick={fetchStudentData}
           disabled={isFetching || !encryptedBackupData || !studentAddressValid || masterPasswordDecrypt.length < 12}
+          className={`${styles["register-button"]} register-button`}
         >
           {isFetching ? "Processando..." : "Visualizar Histórico"}
         </Button>
