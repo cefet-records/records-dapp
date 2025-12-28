@@ -101,7 +101,7 @@ export function AddGlobalBatchDisciplines() {
         }
       }
 
-      setInternalStatusMessage(`✅ Todas as disciplinas foram registradas!`);
+      setInternalStatusMessage(`✅ Lote de disciplinas adicionado com sucesso!`);
     } catch (error: any) {
       console.error("Erro no processamento em lote:", error);
       const errorMsg = error.shortMessage || error.message || "Erro desconhecido";
@@ -159,7 +159,7 @@ export function AddGlobalBatchDisciplines() {
 
           {lastHash && (
             <Typography variant="caption" sx={{ wordBreak: 'break-all', opacity: 0.6, display: 'block' }}>
-              Último Hash: {lastHash.slice(0, 10)}...
+              Hash: {lastHash.slice(0, 10)}...
             </Typography>
           )}
         </Stack>

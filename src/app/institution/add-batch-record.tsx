@@ -111,7 +111,7 @@ export function AddBatchGrade() {
         }
       }
 
-      setInternalStatusMessage(`✅ Sucesso! Todas as notas foram registradas.`);
+      setInternalStatusMessage(`✅ Lote de notas adicionado com sucesso!`);
     } catch (error: any) {
       console.error("Erro no processamento de notas:", error);
       const msg = error.shortMessage || error.message || "Erro inesperado";
@@ -169,7 +169,7 @@ export function AddBatchGrade() {
 
           {lastHash && (
             <Typography variant="caption" sx={{ wordBreak: 'break-all', opacity: 0.6, display: 'block' }}>
-              Último Hash: {lastHash.slice(0, 10)}...
+              Hash: {lastHash.slice(0, 10)}...
             </Typography>
           )}
         </Stack>
