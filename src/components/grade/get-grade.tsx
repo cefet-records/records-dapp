@@ -187,17 +187,31 @@ export function GetGrade() {
       const { data: instData } = await refetchInstitutionData();
 
       // 3. Escolher Payload para Descriptografia
-      let payload = (userPermission === userTypes.STUDENT)
-        ? (student as any).selfEncryptedInformation
-        : (student as any).institutionEncryptedInformation;
+      let payload = "";
+      const isMe = connectedAddress?.toLowerCase() === queryStudentAddress.toLowerCase();
 
-      if (userPermission === userTypes.VISITOR || userPermission === userTypes.OWNER) {
-        const { data: visitorInfo } = await refetchEncryptedInfo();
-        if (visitorInfo && visitorInfo !== '0x') payload = visitorInfo;
+      if (isMe) {
+          payload = (student as any).selfEncryptedInformation;
+      } else if (userPermission === userTypes.INSTITUTION) {
+          payload = (student as any).institutionEncryptedInformation;
+      } else if (userPermission === userTypes.OWNER) {
+          const { data: visitorInfo } = await refetchEncryptedInfo();
+          
+          if (visitorInfo && visitorInfo !== '0x') {
+              payload = visitorInfo as string;
+          } else {
+              // Se não houver acesso concedido, tenta o campo da instituição (caso o owner seja a inst.)
+              payload = (student as any).institutionEncryptedInformation;
+          }
+      } else if (userPermission === userTypes.VISITOR) {
+          const { data: visitorInfo } = await refetchEncryptedInfo();
+          if (visitorInfo && visitorInfo !== '0x') payload = visitorInfo as string;
       }
 
-      if (!payload || payload === '0x') throw new Error("Nenhum dado cifrado disponível para sua chave.");
-      
+      console.log("Payload Selecionado para Descriptografia:", {
+          role: userPermission,
+          hasPayload: !!payload && payload !== '0x'
+      });
       if (student && payload) {
         const decryptedString = await decryptECIES(payload, decryptedPrivKey as Hex);
         const decryptedObj = JSON.parse(decryptedString);

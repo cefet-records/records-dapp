@@ -1,8 +1,8 @@
 // components/institution/AddBatchCourses.tsx
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
-import { useAccount, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
+import React, { useState } from "react";
+import { useAccount, useWriteContract, usePublicClient } from "wagmi";
 import { isAddress, Address } from "viem";
 import { wagmiContractConfig } from "@/abis/AcademicRecordStorageABI";
 import styles from "./add-batch-course.module.css";
@@ -11,140 +11,101 @@ import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 import Button from "@mui/material/Button";
 
-// Estrutura de payload baseada no contrato BatchCoursePayload
 interface BatchCoursePayload {
   code: string;
   name: string;
   courseType: string;
-  numberOfSemesters: bigint; // int (representado como BigInt em JS)
+  numberOfSemesters: bigint;
 }
 
-// URL do novo endpoint API para buscar os cursos
 const BATCH_API_URL = '/api/courses-batch';
-
+// Tamanho do lote: 10 cursos por transação é um valor seguro para payloads sem textos longos
+const CHUNK_SIZE = 10; 
 
 export function AddBatchCourses() {
   const { address: connectedAddress, isConnected } = useAccount();
+  const publicClient = usePublicClient();
+  
   const [internalStatusMessage, setInternalStatusMessage] = useState<string>("");
-  const [isFetchingDB, setIsFetchingDB] = useState<boolean>(false); // NOVO ESTADO para DB
-  const [courseBatch, setCourseBatch] = useState<BatchCoursePayload[]>([]); // Armazena dados do DB
+  const [isProcessing, setIsProcessing] = useState<boolean>(false);
+  const [lastHash, setLastHash] = useState<string | null>(null);
+
+  // Usamos writeContractAsync para controle assíncrono sequencial
+  const { writeContractAsync } = useWriteContract();
 
   const institutionAddress = connectedAddress || ("0x" as Address);
 
-  const { data: hash, error: writeError, isPending, writeContract } = useWriteContract();
-  const { isLoading: isConfirming, isSuccess: isConfirmed, error: confirmError } = useWaitForTransactionReceipt({
-    hash,
-    query: {
-      enabled: !!hash,
-    },
-  });
-
-  // --- FUNÇÃO PARA BUSCAR DADOS DO POSTGRES ---
-  const fetchCoursesFromDB = useCallback(async (): Promise<BatchCoursePayload[]> => {
-    setInternalStatusMessage("Buscando cursos no banco de dados...");
-    setIsFetchingDB(true);
-
-    try {
-      const response = await fetch(BATCH_API_URL);
-
-      if (!response.ok) {
-        const errorBody = await response.json();
-        throw new Error(errorBody.message || `Erro ao buscar cursos (Status: ${response.status})`);
-      }
-
-      const data: BatchCoursePayload[] = await response.json();
-      return data;
-
-    } catch (error) {
-      console.error("Erro ao comunicar com API de Batch (Cursos):", error);
-      const msg = `Falha na comunicação DB: ${error instanceof Error ? error.message : String(error)}`;
-      setInternalStatusMessage(msg);
-      throw error;
-    } finally {
-      setIsFetchingDB(false);
+  // --- BUSCAR DADOS DO BANCO ---
+  const fetchCoursesFromDB = async (): Promise<BatchCoursePayload[]> => {
+    const response = await fetch(BATCH_API_URL);
+    if (!response.ok) {
+      const errorBody = await response.json();
+      throw new Error(errorBody.message || "Erro ao buscar cursos");
     }
-  }, []);
-
-
-  const sendBatchTransaction = useCallback((batchData: BatchCoursePayload[]) => {
-    if (!isConnected || !institutionAddress || !isAddress(institutionAddress)) {
-      setInternalStatusMessage("Erro: Carteira de instituição não conectada ou inválida.");
-      return;
-    }
-    if (batchData.length === 0) {
-      setInternalStatusMessage("Erro: O lote de cursos está vazio.");
-      return;
-    }
-
-    // Casting explícito para o tipo array de structs esperado pelo wagmi
-    const typedBatchData = batchData as unknown as readonly {
-      code: string;
-      name: string;
-      courseType: string;
-      numberOfSemesters: bigint;
-    }[];
-
-    writeContract({
-      ...wagmiContractConfig,
-      functionName: "addBatchCourses",
-      args: [
-        institutionAddress, // address _institutionAddress
-        typedBatchData      // BatchCoursePayload[] _coursesInfo
-      ],
-    });
-  }, [isConnected, institutionAddress, writeContract]);
-
-
-  const handleBatchIngestion = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setInternalStatusMessage("");
-    setCourseBatch([]); // Limpa o lote anterior
-
-    if (!isConnected || !isAddress(institutionAddress)) {
-      setInternalStatusMessage("Erro: Conecte a carteira da instituição.");
-      return;
-    }
-
-    try {
-      // 1. BUSCAR DADOS DO BANCO DE DADOS
-      const batchData = await fetchCoursesFromDB();
-      setCourseBatch(batchData);
-
-      if (batchData.length > 0) {
-        setInternalStatusMessage(`✅ ${batchData.length} cursos carregados do DB. Enviando transação em lote...`);
-        // 2. ENVIAR PARA A BLOCKCHAIN
-        sendBatchTransaction(batchData);
-      } else {
-        setInternalStatusMessage("Nenhum curso encontrado no DB.");
-      }
-
-    } catch (error) {
-      // O erro já foi setado dentro de fetchCoursesFromDB
-    }
+    return await response.json();
   };
 
-
-  useEffect(() => {
-    if (isConfirmed) {
-      setInternalStatusMessage("✅ Lote de cursos adicionado com sucesso!");
-    } else if (writeError || confirmError) {
-      const error = writeError || confirmError;
-      if (error) {
-        const message = (error as any).shortMessage || error.message || "Erro desconhecido";
-        setInternalStatusMessage(`Erro: ${message}`);
-      } else {
-        setInternalStatusMessage(`Erro: Ocorreu um erro, mas a mensagem está vazia.`);
-      }
-    } else if (isPending) {
-      setInternalStatusMessage("Aguardando confirmação na carteira...");
-    } else if (isConfirming) {
-      setInternalStatusMessage("Transação enviada, aguardando confirmação...");
+  // --- LÓGICA DE PROCESSAMENTO EM CHUNKS ---
+  const handleBatchIngestion = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!isConnected || !isAddress(institutionAddress)) {
+      setInternalStatusMessage("Erro: Conecte a carteira.");
+      return;
     }
-  }, [isPending, writeError, isConfirming, isConfirmed, confirmError]);
 
-  // O status isProcessing agora inclui o carregamento do DB
-  const isProcessing = isPending || isConfirming || isFetchingDB;
-  const isButtonDisabled = isProcessing || !isConnected || !isAddress(institutionAddress);
+    setIsProcessing(true);
+    setInternalStatusMessage("Buscando dados no banco...");
+
+    try {
+      const allCourses = await fetchCoursesFromDB();
+      
+      if (allCourses.length === 0) {
+        setInternalStatusMessage("Nenhum curso encontrado no DB.");
+        setIsProcessing(false);
+        return;
+      }
+
+      // Divide o array total em chunks de acordo com CHUNK_SIZE
+      for (let i = 0; i < allCourses.length; i += CHUNK_SIZE) {
+        const chunk = allCourses.slice(i, i + CHUNK_SIZE);
+        const currentBatch = Math.floor(i / CHUNK_SIZE) + 1;
+        const totalBatches = Math.ceil(allCourses.length / CHUNK_SIZE);
+
+        setInternalStatusMessage(`Enviando lote ${currentBatch} de ${totalBatches}...`);
+
+        // Envia a transação para o pedaço atual
+        const txHash = await writeContractAsync({
+          ...wagmiContractConfig,
+          functionName: "addBatchCourses",
+          args: [
+            institutionAddress,
+            chunk as unknown as readonly {
+              code: string;
+              name: string;
+              courseType: string;
+              numberOfSemesters: bigint;
+            }[]
+          ],
+        });
+
+        setLastHash(txHash);
+        setInternalStatusMessage(`Lote ${currentBatch} enviado. Aguardando confirmação...`);
+
+        // AGUARDA a confirmação na blockchain para evitar conflitos de Nonce e Timeout
+        if (publicClient) {
+          await publicClient.waitForTransactionReceipt({ hash: txHash });
+        }
+      }
+
+      setInternalStatusMessage(`✅ Lote de cursos adicionado com sucesso!`);
+    } catch (error: any) {
+      console.error("Erro no processamento de cursos:", error);
+      const errorMsg = error.shortMessage || error.message || "Erro inesperado";
+      setInternalStatusMessage(`Falha: ${errorMsg}`);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
 
   return (
     <Card
@@ -164,41 +125,37 @@ export function AddBatchCourses() {
           Cursos
         </Typography>
         <Typography variant="body2" color="text.secondary" sx={{ minHeight: '48px', lineHeight: 1.4 }}>
-          Busca cursos no banco de dados e os registra na blockchain.
+          Registra os cursos cadastrados no banco de dados na rede blockchain.
         </Typography>
       </Stack>
+
       <Stack gap={1} mt={2}>
         <Button
           variant="contained"
           fullWidth
           onClick={handleBatchIngestion}
-          disabled={isButtonDisabled}
-          sx={{
-            textTransform: 'none',
-            fontWeight: 'bold',
-            borderRadius: '8px',
-            py: 1,
-            backgroundColor: '#1e3a8a'
-          }}
-          className={`${styles["register-button"]} register-button`}
+          disabled={isProcessing || !isConnected}
+          className="register-button"
+          sx={{ textTransform: 'none', fontWeight: 'bold', borderRadius: '8px', py: 1 }}
         >
-          {isFetchingDB ? "BUSCANDO..." : isProcessing ? "PROCESSANDO..." : "EXECUTAR LOTE"}
+          {isProcessing ? "PROCESSANDO..." : "EXECUTAR LOTE"}
         </Button>
-        <Stack sx={{ minHeight: '20px' }}>
+        
+        <Stack sx={{ minHeight: '40px' }}>
           {internalStatusMessage && (
             <Typography
               variant="caption"
               fontWeight="bold"
               display="block"
-              color={internalStatusMessage.includes('Erro') || internalStatusMessage.includes('Falha') ? 'error.main' : 'success.main'}
+              color={internalStatusMessage.includes('Falha') || internalStatusMessage.includes('Erro') ? 'error.main' : 'success.main'}
             >
               {internalStatusMessage}
             </Typography>
           )}
 
-          {hash && (
+          {lastHash && (
             <Typography variant="caption" sx={{ wordBreak: 'break-all', opacity: 0.6, display: 'block' }}>
-              Hash: {hash.slice(0, 10)}...
+              Hash: {lastHash.slice(0, 10)}...
             </Typography>
           )}
         </Stack>
