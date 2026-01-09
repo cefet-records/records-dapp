@@ -90,7 +90,7 @@ O sistema foi otimizado para a rede **Polygon**, garantindo custos baixíssimos 
 ## 🛡️ Segurança
 
 * **Cifragem Client-side:** Dados sensíveis são protegidos antes de sair do navegador do usuário.
-* **Algoritmos:** AES-256-CBC, PBKDF2 e ECIES.
+* **Algoritmos:** AES-256-GCM, PBKDF2 e ECIES.
 * **Soberania:** A instituição detém a chave mestra para a guarda de identidades e recuperação de dados.
 
 ---

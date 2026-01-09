@@ -9,8 +9,9 @@ import {
 } from "wagmi";
 import { Address, isAddress } from "viem";
 import { wagmiContractConfig } from "@/abis/AcademicRecordStorageABI";
-import CryptoJS from "crypto-js";
 import * as secp from "@noble/secp256k1";
+import { gcm } from "@noble/ciphers/aes.js";
+import { pbkdf2Async } from "@noble/hashes/pbkdf2.js";
 import { bytesToHex } from "viem";
 import { randomBytes } from "@noble/ciphers/utils.js";
 import Card from "../card/card";
@@ -21,6 +22,8 @@ import Stack from "@mui/material/Stack";
 import styles from "./add-institution-information.module.css";
 import { useSnackbar } from "../snackbar/snackbar-context";
 import TransactionInfo from "../transaction-info/transaction-info";
+import { sha256 } from "@noble/hashes/sha2.js";
+import { Base64 } from "js-base64";
 
 // --- CONSTANTES ---
 const LOCAL_STORAGE_KEY_PREFIX = "institutionEncryptedPrivateKey_";
@@ -132,17 +135,23 @@ export default function AddInstitutionInfo(): JSX.Element | null {
       const pubHex = bytesToHex(secp.getPublicKey(privBytes, false));
       setGeneratedPublicKey(pubHex);
 
-      // 2. Criptografia PBKDF2 + AES-256-CBC
-      const salt = CryptoJS.lib.WordArray.random(16);
-      const key = CryptoJS.PBKDF2(masterPassword, salt, { keySize: 8, iterations: KDF_ITERATIONS });
-      const iv = CryptoJS.lib.WordArray.random(16);
-      const encrypted = CryptoJS.AES.encrypt(privHex, key, { iv, mode: CryptoJS.mode.CBC, padding: CryptoJS.pad.Pkcs7 }).toString();
+      // 2. Criptografia PBKDF2 + AES-256-GCM
+      const salt = randomBytes(32);
+      const derivedKey = await pbkdf2Async(sha256, masterPassword, salt, { 
+        c: KDF_ITERATIONS, 
+        dkLen: 32 
+      });
+      
+      const iv = randomBytes(12);
+      const aes = gcm(derivedKey, iv);
+      const privTexBytes = new TextEncoder().encode(privHex);
+      const encryptedBytes = aes.encrypt(privTexBytes);
 
       const backup: BackupData = {
-        encryptedPrivateKey: encrypted,
-        salt: salt.toString(CryptoJS.enc.Hex),
+        encryptedPrivateKey: Base64.fromUint8Array(encryptedBytes),
+        salt: bytesToHex(salt),
         kdfIterations: KDF_ITERATIONS,
-        iv: iv.toString(CryptoJS.enc.Hex),
+        iv: bytesToHex(iv),
       };
 
       // 3. Persistência Local e Preparação de Download

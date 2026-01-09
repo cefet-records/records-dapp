@@ -9,7 +9,6 @@ import { useIsClient } from "../../app/is-client";
 import * as secp from "@noble/secp256k1";
 import styles from "./request-access.module.css";
 import { bytesToHex } from "viem";
-import CryptoJS from "crypto-js";
 import Card from "../card/card";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
@@ -17,6 +16,11 @@ import TextField from "@mui/material/TextField";
 import Button from "@mui/material/Button";
 import TransactionInfo from "../transaction-info/transaction-info";
 import { useSnackbar } from "../snackbar/snackbar-context";
+import { gcm } from "@noble/ciphers/aes.js";
+import { pbkdf2Async } from "@noble/hashes/pbkdf2.js";
+import { sha256 } from "@noble/hashes/sha2.js";
+import { randomBytes } from "@noble/ciphers/utils.js";
+import { Base64 } from 'js-base64';
 
 const KDF_ITERATIONS = 262144;
 const KDF_KEY_SIZE = 256 / 8;
@@ -163,30 +167,22 @@ export function RequestAccess() {
       setGeneratedPrivateKey(privateKeyHex);
       setGeneratedPublicKey(publicKeyHex);
 
-      const saltBytes = window.crypto.getRandomValues(new Uint8Array(16));
-      const saltHex = bytesToHex(saltBytes).substring(2);
-      const ivBytes = window.crypto.getRandomValues(new Uint8Array(16));
-      const ivHex = bytesToHex(ivBytes).substring(2);
-      const saltKDF = CryptoJS.enc.Hex.parse(saltHex);
-      const ivCipher = CryptoJS.enc.Hex.parse(ivHex);
-
-      const keyKDF = CryptoJS.PBKDF2(masterPasswordGenerate, saltKDF, {
-        keySize: KDF_KEY_SIZE / 4,
-        iterations: KDF_ITERATIONS,
+      const salt = randomBytes(16);
+      const derivedKey = await pbkdf2Async(sha256, masterPasswordGenerate, salt, {
+        c: KDF_ITERATIONS,
+        dkLen: 32
       });
 
-      const encryptedWords = CryptoJS.AES.encrypt(privateKeyHex, keyKDF, {
-        mode: CryptoJS.mode.CBC,
-        padding: CryptoJS.pad.Pkcs7,
-        iv: ivCipher,
-      });
-
-      const encryptedPrivateKeyBase64 = encryptedWords.toString();
+      const iv = randomBytes(12);
+      const aes = gcm(derivedKey, iv);
+      const privTextBytes = new TextEncoder().encode(privateKeyHex);
+      const encryptedBytes = aes.encrypt(privTextBytes);
+      
       const backupData: BackupFileContent = {
-        encryptedPrivateKey: encryptedPrivateKeyBase64,
-        salt: saltHex,
+        encryptedPrivateKey: Base64.fromUint8Array(encryptedBytes),
+        salt: bytesToHex(salt),
         kdfIterations: KDF_ITERATIONS,
-        iv: ivHex,
+        iv: bytesToHex(iv),
       };
 
       saveViewerToLocalStorage(currentAddress, backupData);

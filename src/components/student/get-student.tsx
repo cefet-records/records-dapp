@@ -6,6 +6,11 @@ import { wagmiContractConfig } from "@/abis/AcademicRecordStorageABI";
 import { Address, isAddress, Hex, keccak256, toBytes } from "viem";
 import { decryptECIES } from "@/utils/cripto.utils";
 import CryptoJS from "crypto-js";
+import { gcm } from "@noble/ciphers/aes.js";
+import { pbkdf2Async } from "@noble/hashes/pbkdf2.js";
+import { sha256 } from "@noble/hashes/sha2.js";
+import { hexToBytes } from "viem";
+import { Base64 } from 'js-base64';
 
 import Card from "../card/card";
 import Typography from "@mui/material/Typography";
@@ -147,26 +152,26 @@ export function GetStudent(): JSX.Element {
 
     try {
       // Derivação AES
-      const saltKDF = CryptoJS.enc.Hex.parse(encryptedBackupData.salt);
-      const keyKDF = CryptoJS.PBKDF2(masterPasswordDecrypt, saltKDF, {
-        keySize: KDF_KEY_SIZE / 4,
-        iterations: KDF_ITERATIONS,
+      const salt = hexToBytes(encryptedBackupData.salt as Hex);
+      const derivedKey = await pbkdf2Async(sha256, masterPasswordDecrypt, salt, {
+        c: encryptedBackupData.kdfIterations || KDF_ITERATIONS,
+        dkLen: 32
       });
-      const iv = CryptoJS.enc.Hex.parse(encryptedBackupData.iv);
-      const decryptedPrivKey = CryptoJS.AES.decrypt(encryptedBackupData.encryptedPrivateKey, keyKDF, {
-        mode: CryptoJS.mode.CBC,
-        padding: CryptoJS.pad.Pkcs7,
-        iv: iv,
-      }).toString(CryptoJS.enc.Utf8);
+      const iv = hexToBytes(encryptedBackupData.iv as Hex);
+      const encryptedBytes = Base64.toUint8Array(encryptedBackupData.encryptedPrivateKey);
 
-      if (!decryptedPrivKey.startsWith('0x')) throw new Error("Senha incorreta");
+      const aes = gcm(derivedKey, iv);
+      const decryptedPrivKeyBytes = aes.decrypt(encryptedBytes);
+      const decryptedPrivKeyHex = new TextDecoder().decode(decryptedPrivKeyBytes);
+
+      if (!decryptedPrivKeyHex.startsWith('0x')) throw new Error("Formato de chave inválido");
 
       // Busca e Decriptografia ECIES
       const { data } = await refetchStudentData();
       const student = data as any;
       const payload = targetAudience === 'institution' ? student.institutionEncryptedInformation : student.selfEncryptedInformation;
 
-      const decryptedJson = await decryptECIES(payload, decryptedPrivKey as Hex);
+      const decryptedJson = await decryptECIES(payload, decryptedPrivKeyHex as Hex);
       setDecryptedData(JSON.parse(decryptedJson));
       showSnackbar("Dados abertos com sucesso!", "success");
     } catch (err: any) {

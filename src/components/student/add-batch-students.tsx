@@ -16,7 +16,7 @@ interface BatchStudentPayload {
   institutionAddress: Address;
 }
 
-const BATCH_API_URL = '/api/students-batch';
+const BATCH_API_URL = '/api/students-batch';  
 // Tamanho do lote: 15 estudantes por transação (endereços são leves, permite lotes maiores)
 const CHUNK_SIZE = 15; 
 

@@ -21,6 +21,10 @@ import Button from "@mui/material/Button";
 import styles from "./add-student.module.css";
 import { useSnackbar } from "../snackbar/snackbar-context";
 import TransactionInfo from "../transaction-info/transaction-info";
+import { gcm } from "@noble/ciphers/aes.js";
+import { pbkdf2Async } from "@noble/hashes/pbkdf2.js";
+import { sha256 } from "@noble/hashes/sha2.js";
+import { Base64 } from 'js-base64';
 
 // --- CONSTANTES ---
 const LOCAL_STORAGE_KEY_PREFIX = "studentEncryptedPrivateKey_";
@@ -129,16 +133,22 @@ export function AddStudentInformation(): JSX.Element | null {
       setGeneratedStudentPublicKey(publicKeyHex);
 
       // Criptografia da Chave Privada
-      const saltKDF = CryptoJS.lib.WordArray.random(16);
-      const keyKDF = CryptoJS.PBKDF2(masterPassword, saltKDF, { keySize: 8, iterations: KDF_ITERATIONS });
-      const iv = CryptoJS.lib.WordArray.random(16);
-      const encryptedPrivKey = CryptoJS.AES.encrypt(privateKeyHex, keyKDF, { iv, mode: CryptoJS.mode.CBC, padding: CryptoJS.pad.Pkcs7 }).toString();
+      const salt = randomBytes(16);
+      const derivedKey = await pbkdf2Async(sha256, masterPassword, salt, {
+        c: KDF_ITERATIONS,
+        dkLen: 32
+      });
+
+      const iv = randomBytes(12);
+      const aes = gcm(derivedKey, iv);
+      const privTextBytes = new TextEncoder().encode(privateKeyHex);
+      const encryptedBytes = aes.encrypt(privTextBytes);
 
       const backup: BackupData = {
-        encryptedPrivateKey: encryptedPrivKey,
-        salt: saltKDF.toString(CryptoJS.enc.Hex),
+        encryptedPrivateKey: Base64.fromUint8Array(encryptedBytes),
+        salt: bytesToHex(salt),
         kdfIterations: KDF_ITERATIONS,
-        iv: iv.toString(CryptoJS.enc.Hex),
+        iv: bytesToHex(iv),
       };
 
       // Persistência e Download

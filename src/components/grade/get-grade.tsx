@@ -3,11 +3,15 @@
 
 import React, { useState, useEffect, useCallback, ChangeEvent } from "react";
 import { useAccount, useReadContract } from "wagmi";
-import { isAddress, Address, Hex } from "viem";
+import { isAddress, Address, Hex, hexToBytes } from "viem";
 import { wagmiContractConfig } from "../../abis/AcademicRecordStorageABI";
 import { useIsClient } from "../../app/is-client";
 import { decryptECIES } from '../../utils/cripto.utils';
 import CryptoJS from "crypto-js";
+import { gcm } from "@noble/ciphers/aes.js";
+import { pbkdf2Async } from "@noble/hashes/pbkdf2.js";
+import { sha256 } from "@noble/hashes/sha2.js";
+import { Base64 } from 'js-base64';
 import styles from "./get-grade.module.css";
 import Card from "../card/card";
 import Typography from "@mui/material/Typography";
@@ -166,20 +170,18 @@ export function GetGrade() {
     setIsFetching(true);
 
     try {
-      // 1. Derivar Chave Privada
-      const saltKDF = CryptoJS.enc.Hex.parse(encryptedBackupData.salt);
-      const keyKDF = CryptoJS.PBKDF2(masterPasswordDecrypt, saltKDF, {
-        keySize: KDF_KEY_SIZE / 4,
-        iterations: KDF_ITERATIONS,
+      const salt = hexToBytes(encryptedBackupData.salt as Hex);
+      const derivedKey = await pbkdf2Async(sha256, masterPasswordDecrypt, salt, {
+        c: encryptedBackupData.kdfIterations || KDF_ITERATIONS,
+        dkLen: 32
       });
-      const iv = CryptoJS.enc.Hex.parse(encryptedBackupData.iv);
-      const decryptedPrivKey = CryptoJS.AES.decrypt(encryptedBackupData.encryptedPrivateKey, keyKDF, {
-        mode: CryptoJS.mode.CBC,
-        padding: CryptoJS.pad.Pkcs7,
-        iv: iv,
-      }).toString(CryptoJS.enc.Utf8);
+      const iv = hexToBytes(encryptedBackupData.iv as Hex);
+      const encryptedBytes = Base64.toUint8Array(encryptedBackupData.encryptedPrivateKey);
+      const aes = gcm(derivedKey, iv);
+      const decryptedPrivKeyBytes = aes.decrypt(encryptedBytes);
+      const decryptedPrivKeyHex = new TextDecoder().decode(decryptedPrivKeyBytes);
 
-      if (!decryptedPrivKey.startsWith('0x')) throw new Error("Senha mestra incorreta.");
+      if (!decryptedPrivKeyHex.startsWith('0x')) throw new Error("Chave recuperada inválida.");
 
       // 2. Buscar Dados
       const { data: student } = await refetchStudent();
@@ -213,7 +215,7 @@ export function GetGrade() {
           hasPayload: !!payload && payload !== '0x'
       });
       if (student && payload) {
-        const decryptedString = await decryptECIES(payload, decryptedPrivKey as Hex);
+        const decryptedString = await decryptECIES(payload, decryptedPrivKeyHex as Hex);
         const decryptedObj = JSON.parse(decryptedString);
         const infoWithHash = { ...decryptedObj, publicHash: student.publicHash };
         setStudentInfo(infoWithHash);

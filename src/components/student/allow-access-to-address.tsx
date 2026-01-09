@@ -2,11 +2,15 @@
 
 import React, { JSX, useState, useEffect, useCallback, ChangeEvent } from "react";
 import { useAccount, usePublicClient, useReadContract, useWriteContract } from "wagmi";
-import { isAddress, Address, Hex } from "viem";
+import { isAddress, Address, Hex, hexToBytes } from "viem";
 import { wagmiContractConfig } from "../../abis/AcademicRecordStorageABI";
 import { encryptECIES, decryptECIES } from '../../utils/cripto.utils';
 import styles from "./add-student.module.css";
-import CryptoJS from "crypto-js";
+
+import { gcm } from "@noble/ciphers/aes.js";
+import { pbkdf2Async } from "@noble/hashes/pbkdf2.js";
+import { sha256 } from "@noble/hashes/sha2.js";
+import { Base64 } from 'js-base64';
 
 // Componentes de UI
 import Card from "../card/card";
@@ -120,20 +124,22 @@ export function AllowAccessToAddress(): JSX.Element {
 
   const deriveKey = async (data: BackupFileContent): Promise<Hex | null> => {
     try {
-      const saltKDF = CryptoJS.enc.Hex.parse(data.salt);
-      const keyKDF = CryptoJS.PBKDF2(studentMasterPasswordDecrypt, saltKDF, {
-        keySize: KDF_KEY_SIZE / 4,
-        iterations: data.kdfIterations || KDF_ITERATIONS,
+      const salt = hexToBytes(data.salt as Hex);
+      const derivedKey = await pbkdf2Async(sha256, studentMasterPasswordDecrypt, salt, {
+        c: data.kdfIterations || KDF_ITERATIONS,
+        dkLen: 32
       });
-      const iv = CryptoJS.enc.Hex.parse(data.iv);
-      const decrypted = CryptoJS.AES.decrypt(data.encryptedPrivateKey, keyKDF, {
-        mode: CryptoJS.mode.CBC,
-        padding: CryptoJS.pad.Pkcs7,
-        iv: iv,
-      }).toString(CryptoJS.enc.Utf8);
+      const iv = hexToBytes(data.iv as Hex);
+      const encryptedBytes = Base64.toUint8Array(data.encryptedPrivateKey);
 
-      if (!decrypted.startsWith('0x')) throw new Error();
-      return decrypted as Hex;
+      const aes = gcm(derivedKey, iv);
+      const decryptedBytes = aes.decrypt(encryptedBytes);
+      const decryptedHex = new TextDecoder().decode(decryptedBytes);
+
+    
+
+      if (!decryptedHex.startsWith('0x')) throw new Error("Formato inválido");
+      return decryptedHex as Hex;
     } catch (e) {
       showSnackbar("Senha mestra incorreta", "error");
       return null;
