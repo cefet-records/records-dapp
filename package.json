@@ -29,7 +29,7 @@
     "ethereumjs-util": "^7.1.5",
     "js-base64": "^3.7.8",
     "jsrsasign": "^11.1.0",
-    "next": "15.5.4",
+    "next": "15.5.9",
     "ngrok": "^5.0.0-beta.2",
     "pg": "^8.16.3",
     "react": "19.1.0",
