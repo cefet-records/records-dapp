@@ -3,12 +3,10 @@
 import { NextResponse } from 'next/server';
 import { Buffer } from 'buffer';
 import * as crypto from 'crypto'; 
-import * as fs from 'fs'; 
-import * as path from 'path'; 
 
 // --- VARIÁVEIS DE AMBIENTE ---
 const WEBHOOK_SECRET = process.env.DYNAMIC_WEBHOOK_SECRET!; 
-const DEVELOPER_RSA_PRIVATE_KEY_PATH = process.env.DEVELOPER_RSA_PRIVATE_KEY_PATH!;
+const DEVELOPER_RSA_PRIVATE_KEY = process.env.DEVELOPER_RSA_PRIVATE_KEY!;
 
 // Cache da chave privada para evitar leituras repetidas do disco
 let cachedDeveloperRSAPrivateKey: string | null = null;
@@ -18,11 +16,10 @@ function getDeveloperRSAPrivateKey(): string {
     if (cachedDeveloperRSAPrivateKey) {
         return cachedDeveloperRSAPrivateKey;
     }
-    if (!DEVELOPER_RSA_PRIVATE_KEY_PATH) {
-        throw new Error("DEVELOPER_RSA_PRIVATE_KEY_PATH não configurado no .env");
+    if (!DEVELOPER_RSA_PRIVATE_KEY) {
+        throw new Error("DEVELOPER_RSA_PRIVATE_KEY não configurado no .env");
     }
-    const keyPath = path.resolve(process.cwd(), DEVELOPER_RSA_PRIVATE_KEY_PATH);
-    cachedDeveloperRSAPrivateKey = fs.readFileSync(keyPath, 'utf8');
+    cachedDeveloperRSAPrivateKey = DEVELOPER_RSA_PRIVATE_KEY;
     return cachedDeveloperRSAPrivateKey;
 }
 
