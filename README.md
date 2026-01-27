@@ -1,8 +1,15 @@
 # 🎓 Academic Record Management DApp
 
-Sistema descentralizado para gestão de registros acadêmicos com foco em **escalabilidade**, **privacidade** e **baixas taxas de transação**. O projeto utiliza orquestração de dados em lote e carteiras embarcadas para uma experiência de usuário simplificada.
+**Título do TCC:** Aplicação de Tecnologias Descentralizadas para Gestão de Registros Acadêmicos e Transferência de Créditos
+**Alunos:**
+* Gabriel Franco Barreto Cavalcanti
+* Gilmar Santos Neto
+* Juan Carvalho Silva de Lima
+**Semestre de Defesa:** 2025-2
 
-## 🔗 Repositórios do Ecossistema
+[PDF do TCC](./public/tcc.pdf)
+
+# TL;DR
 
 Este projeto é composto por três módulos independentes que trabalham de forma integrada. Certifique-se de clonar todos para a execução completa:
 
@@ -76,25 +83,30 @@ Acesse o painel em `localhost:8080` para gerenciar os disparos via CSV.
 
 ---
 
-## 🧪 Viabilidade Econômica (Rede Polygon)
+# Descrição Geral
 
-O sistema foi otimizado para a rede **Polygon**, garantindo custos baixíssimos mesmo em cenários de alta volumetria:
+Sistema descentralizado para gestão de registros acadêmicos com foco em **escalabilidade**, **privacidade** e **baixas taxas de transação**. O projeto utiliza orquestração de dados em lote e carteiras embarcadas para uma experiência de usuário simplificada.
 
-| Cenário | Qtd. Notas | Custo Est. (BRL) |
-| --- | --- | --- |
-| Cenário 1 | 3 | R$ 0,0292 |
-| Cenário 4 | 500 | R$ 0,4992 |
+# Funcionalidades
 
----
+* **Gestão Institucional de Registos em Lote**
+  * Ingestão automatizada de grandes volumes de dados de estudantes, cursos e disciplinas.
+  * Processamento de notas de forma coletiva para redução drástica de custos de rede.
+  * Validação de integridade e unicidade dos dados antes da persistência na blockchain.
+* **Privacidade e Proteção de Dados Sensíveis**
+  * Cifragem de ponta a ponta (*client-side*) utilizando o esquema ECIES.
+  * Proteção da identidade do estudante (nome e documentos) fora da rede pública.
+  * Implementação de motor criptográfico local com AES-256-GCM e PBKDF2.
+* **Soberania de Identidade e Carteira Embarcada**
+  * Integração com *Embedded Wallets* (Dynamic MPC) para abstração da complexidade Web3.
+  * Gestão de chaves privadas baseada em Senha Mestra de conhecimento exclusivo do titular.
+  * Independência de extensões de navegador ou bibliotecas de carteiras legadas.
+* **Controlo de Acesso Condicional**
+  * Fluxo descentralizado para solicitação de acesso por visitantes externos.
+  * Mecanismo de recifragem direcionada para partilha segura de históricos acadêmicos.
+  * Trilha de auditoria imutável de todas as concessões de acesso realizadas.
+* **Otimização de Custos e Escalabilidade**
+  * Agregação de transações (*batching*) para diluição das taxas de *gas*.
+  * Compatibilidade com redes EVM de camada 2 (Polygon) para viabilidade económica.
+  * Orquestração de pipelines de dados via Apache Airflow integrada ao DApp.
 
-## 🛡️ Segurança
-
-* **Cifragem Client-side:** Dados sensíveis são protegidos antes de sair do navegador do usuário.
-* **Algoritmos:** AES-256-GCM, PBKDF2 e ECIES.
-* **Soberania:** A instituição detém a chave mestra para a guarda de identidades e recuperação de dados.
-
----
-
-**Projeto desenvolvido como Trabalho de Conclusão de Curso (TCC) no CEFET-RJ.**
-
----
