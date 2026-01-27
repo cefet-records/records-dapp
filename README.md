@@ -1,10 +1,12 @@
 # 🎓 Academic Record Management DApp
 
 **Título do TCC:** Aplicação de Tecnologias Descentralizadas para Gestão de Registros Acadêmicos e Transferência de Créditos
+
 **Alunos:**
 * Gabriel Franco Barreto Cavalcanti
 * Gilmar Santos Neto
 * Juan Carvalho Silva de Lima
+
 **Semestre de Defesa:** 2025-2
 
 [PDF do TCC](./public/tcc.pdf)
